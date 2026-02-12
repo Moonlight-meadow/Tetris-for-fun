@@ -116,7 +116,7 @@ function createPiece() {
 
 // Draw grid lines
 function drawGrid() {
-    ctx.strokeStyle = 'rgba(100, 100, 150, 0.15)';
+    ctx.strokeStyle = 'rgba(100, 150, 200, 0.25)'; // More visible grid
     ctx.lineWidth = 1;
     
     // Draw vertical lines
@@ -154,12 +154,14 @@ function drawBlock(context, x, y, color, blockSize = BLOCK_SIZE) {
 }
 
 function drawBoard() {
+    // Clear canvas with dark background
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw grid first
+    // ALWAYS draw grid (visible from start)
     drawGrid();
     
+    // Draw placed blocks
     board.forEach((row, y) => {
         row.forEach((value, x) => {
             if (value) drawBlock(ctx, x, y, COLORS[value]);
@@ -205,7 +207,7 @@ function drawHighlightBeams() {
                 const currentBlockY = currentPiece.y + y;
                 const ghostBlockY = ghostY + y;
                 
-                // Create vertical gradient beam
+                // Create vertical gradient beam - BRIGHTER colors
                 const gradient = ctx.createLinearGradient(
                     blockX * BLOCK_SIZE + BLOCK_SIZE / 2,
                     currentBlockY * BLOCK_SIZE,
@@ -213,29 +215,42 @@ function drawHighlightBeams() {
                     ghostBlockY * BLOCK_SIZE
                 );
                 
-                gradient.addColorStop(0, 'rgba(255, 255, 150, 0.3)');
-                gradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.15)');
-                gradient.addColorStop(1, 'rgba(255, 255, 150, 0.05)');
+                // Much brighter gradient
+                gradient.addColorStop(0, 'rgba(255, 255, 100, 0.5)');
+                gradient.addColorStop(0.3, 'rgba(255, 255, 100, 0.3)');
+                gradient.addColorStop(0.7, 'rgba(255, 255, 100, 0.2)');
+                gradient.addColorStop(1, 'rgba(255, 255, 100, 0.1)');
                 
                 ctx.fillStyle = gradient;
                 
                 // Draw beam from bottom of current piece to top of ghost
-                ctx.fillRect(
-                    blockX * BLOCK_SIZE + 3,
-                    currentBlockY * BLOCK_SIZE + BLOCK_SIZE,
-                    BLOCK_SIZE - 6,
-                    (ghostBlockY - currentBlockY) * BLOCK_SIZE - BLOCK_SIZE
-                );
-                
-                // Add glowing edges
-                ctx.strokeStyle = 'rgba(255, 255, 200, 0.4)';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(
-                    blockX * BLOCK_SIZE + 3,
-                    currentBlockY * BLOCK_SIZE + BLOCK_SIZE,
-                    BLOCK_SIZE - 6,
-                    (ghostBlockY - currentBlockY) * BLOCK_SIZE - BLOCK_SIZE
-                );
+                const beamHeight = (ghostBlockY - currentBlockY) * BLOCK_SIZE - BLOCK_SIZE;
+                if (beamHeight > 0) {
+                    ctx.fillRect(
+                        blockX * BLOCK_SIZE + 4,
+                        currentBlockY * BLOCK_SIZE + BLOCK_SIZE,
+                        BLOCK_SIZE - 8,
+                        beamHeight
+                    );
+                    
+                    // Add bright glowing edges
+                    ctx.strokeStyle = 'rgba(255, 255, 150, 0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(
+                        blockX * BLOCK_SIZE + 4,
+                        currentBlockY * BLOCK_SIZE + BLOCK_SIZE,
+                        BLOCK_SIZE - 8,
+                        beamHeight
+                    );
+                    
+                    // Add center highlight line for more visibility
+                    ctx.strokeStyle = 'rgba(255, 255, 200, 0.8)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(blockX * BLOCK_SIZE + BLOCK_SIZE / 2, currentBlockY * BLOCK_SIZE + BLOCK_SIZE);
+                    ctx.lineTo(blockX * BLOCK_SIZE + BLOCK_SIZE / 2, ghostBlockY * BLOCK_SIZE);
+                    ctx.stroke();
+                }
             }
         });
     });
@@ -252,21 +267,26 @@ function drawGhostPiece() {
                 const blockX = currentPiece.x + x;
                 const blockY = ghostY + y;
                 
-                // Draw glow effect
-                ctx.shadowColor = 'rgba(255, 255, 150, 0.5)';
-                ctx.shadowBlur = 10;
+                // Draw outer glow
+                ctx.shadowColor = 'rgba(255, 255, 100, 0.8)';
+                ctx.shadowBlur = 15;
                 
-                // Draw ghost block with subtle fill
-                ctx.fillStyle = 'rgba(255, 255, 150, 0.08)';
+                // Draw ghost block with more visible fill
+                ctx.fillStyle = 'rgba(255, 255, 150, 0.15)';
                 ctx.fillRect(blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
                 
-                // Draw border
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-                ctx.lineWidth = 2;
+                // Reset shadow for border
+                ctx.shadowBlur = 0;
+                
+                // Draw bright border
+                ctx.strokeStyle = 'rgba(255, 255, 200, 0.7)';
+                ctx.lineWidth = 3;
                 ctx.strokeRect(blockX * BLOCK_SIZE + 2, blockY * BLOCK_SIZE + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
                 
-                // Reset shadow
-                ctx.shadowBlur = 0;
+                // Add inner border for more definition
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(blockX * BLOCK_SIZE + 5, blockY * BLOCK_SIZE + 5, BLOCK_SIZE - 10, BLOCK_SIZE - 10);
             }
         });
     });
