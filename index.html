@@ -77,16 +77,6 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="info-section preview-section">
-                    <h3>NEXT</h3>
-                    <canvas id="nextCanvas" width="120" height="120"></canvas>
-                </div>
-
-                <div class="info-section preview-section">
-                    <h3>HOLD</h3>
-                    <canvas id="holdCanvas" width="120" height="120"></canvas>
-                </div>
             </div>
 
             <!-- Center: Game Canvas -->
@@ -126,14 +116,27 @@
                 <div class="game-message" id="gameMessage">Press START to begin your journey</div>
             </div>
 
-            <!-- Right Panel: Leaderboard -->
+            <!-- Right Panel: Next and Hold -->
             <div class="side-panel right-panel">
-                <div class="leaderboard-section">
-                    <h3>🏆 TOP PLAYERS</h3>
-                    <div class="leaderboard" id="leaderboard">
-                        <div class="leaderboard-item loading">
-                            Loading...
-                        </div>
+                <div class="info-section preview-section">
+                    <h3>NEXT</h3>
+                    <canvas id="nextCanvas" width="120" height="120"></canvas>
+                </div>
+
+                <div class="info-section preview-section">
+                    <h3>HOLD</h3>
+                    <canvas id="holdCanvas" width="120" height="120"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Section at Bottom -->
+        <div class="leaderboard-container">
+            <div class="leaderboard-section">
+                <h3>🏆 TOP PLAYERS</h3>
+                <div class="leaderboard" id="leaderboard">
+                    <div class="leaderboard-item loading">
+                        Loading...
                     </div>
                 </div>
             </div>
@@ -154,6 +157,9 @@
     </div>
 
     <!-- Audio Elements -->
+    <audio id="menuMusic" loop>
+        <source src="fancy.mp3" type="audio/mpeg">
+    </audio>
     <audio id="backgroundMusic" loop>
         <source src="background.mp3" type="audio/mpeg">
     </audio>
@@ -165,6 +171,12 @@
     </audio>
     <audio id="completeSound">
         <source src="complete.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="milestone2k">
+        <source src="2kremaining.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="milestone1k">
+        <source src="1kremaining.mp3" type="audio/mpeg">
     </audio>
     <audio id="winSound">
         <source src="win.mp3" type="audio/mpeg">
