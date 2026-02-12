@@ -216,10 +216,10 @@ function drawHighlightBeams() {
                     ghostBlockY * BLOCK_SIZE
                 );
                 
-                // Balanced gradient - visible but not overpowering
-                gradient.addColorStop(0, 'rgba(255, 255, 150, 0.25)');
-                gradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.15)');
-                gradient.addColorStop(1, 'rgba(255, 255, 150, 0.05)');
+                // Very subtle gradient - barely visible
+                gradient.addColorStop(0, 'rgba(255, 255, 150, 0.08)');
+                gradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.04)');
+                gradient.addColorStop(1, 'rgba(255, 255, 150, 0.02)');
                 
                 ctx.fillStyle = gradient;
                 
@@ -233,8 +233,8 @@ function drawHighlightBeams() {
                         beamHeight
                     );
                     
-                    // Add subtle glowing edges
-                    ctx.strokeStyle = 'rgba(255, 255, 200, 0.3)';
+                    // Very subtle glowing edges
+                    ctx.strokeStyle = 'rgba(255, 255, 200, 0.1)';
                     ctx.lineWidth = 1;
                     ctx.strokeRect(
                         blockX * BLOCK_SIZE + 5,
