@@ -1,0 +1,558 @@
+// Game Constants
+const COLS = 10;
+const ROWS = 20;
+const BLOCK_SIZE = 30;
+const TARGET_SCORE = 5000;
+const LINES_PER_WAVE = 50;
+const INITIAL_DROP_INTERVAL = 1000;
+const SPEED_INCREASE_PER_WAVE = 50; // Decreased speed increase per wave (was suggested 0.05 but using ms)
+
+// Tetromino Colors
+const COLORS = [
+    null,
+    '#FF6B9D', // I
+    '#C44569', // J
+    '#FFA502', // L
+    '#FFD93D', // O
+    '#6BCB77', // S
+    '#4D96FF', // T
+    '#845EC2'  // Z
+];
+
+// Tetromino Shapes
+const PIECES = [
+    [],
+    [[1,1,1,1]],           // I
+    [[2,0,0],[2,2,2]],     // J
+    [[0,0,3],[3,3,3]],     // L
+    [[4,4],[4,4]],         // O
+    [[0,5,5],[5,5,0]],     // S
+    [[0,6,0],[6,6,6]],     // T
+    [[7,7,0],[0,7,7]]      // Z
+];
+
+// Canvas Elements
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('nextCanvas');
+const nextCtx = nextCanvas.getContext('2d');
+const holdCanvas = document.getElementById('holdCanvas');
+const holdCtx = holdCanvas.getContext('2d');
+
+// Audio Elements
+const sounds = {
+    background: document.getElementById('backgroundMusic'),
+    hit: document.getElementById('hitSound'),
+    rotate: document.getElementById('rotateSound'),
+    complete: document.getElementById('completeSound'),
+    win: document.getElementById('winSound'),
+    lose: document.getElementById('loseSound')
+};
+
+// Game State
+let board = [];
+let score = 0;
+let lines = 0;
+let wave = 1;
+let currentPiece = null;
+let nextPiece = null;
+let holdPiece = null;
+let canHold = true;
+let running = false;
+let dropInterval = INITIAL_DROP_INTERVAL;
+let lastTime = 0;
+let dropCounter = 0;
+let hasReachedTarget = false;
+let keysPressed = {};
+
+// UI Elements
+const startBtn = document.getElementById('startBtn');
+const retryBtn = document.getElementById('retryBtn');
+const continueBtn = document.getElementById('continueBtn');
+const finishBtn = document.getElementById('finishBtn');
+const finalRetryBtn = document.getElementById('finalRetryBtn');
+const startOverlay = document.getElementById('startOverlay');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const winOverlay = document.getElementById('winOverlay');
+const finalWinOverlay = document.getElementById('finalWinOverlay');
+const gameMessage = document.getElementById('gameMessage');
+
+// Initialize
+function init() {
+    board = createBoard();
+    updateUI();
+    drawBoard();
+    loadLeaderboard();
+}
+
+// Create empty board
+function createBoard() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+}
+
+// Create random piece
+function createPiece() {
+    const type = Math.floor(Math.random() * 7) + 1;
+    const shape = PIECES[type].map(row => [...row]);
+    return {
+        shape,
+        color: type,
+        x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2),
+        y: 0
+    };
+}
+
+// Draw functions
+function drawBlock(context, x, y, color, blockSize = BLOCK_SIZE) {
+    if (!color) return;
+    
+    context.fillStyle = color;
+    context.fillRect(x * blockSize, y * blockSize, blockSize, blockSize);
+    
+    // Highlight
+    context.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    context.fillRect(x * blockSize + 1, y * blockSize + 1, blockSize / 3, blockSize / 3);
+    
+    // Border
+    context.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    context.lineWidth = 1;
+    context.strokeRect(x * blockSize, y * blockSize, blockSize, blockSize);
+}
+
+function drawBoard() {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    board.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) drawBlock(ctx, x, y, COLORS[value]);
+        });
+    });
+}
+
+function drawPiece() {
+    if (!currentPiece) return;
+    currentPiece.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                drawBlock(ctx, currentPiece.x + x, currentPiece.y + y, COLORS[currentPiece.color]);
+            }
+        });
+    });
+}
+
+function drawGhostPiece() {
+    if (!currentPiece) return;
+    
+    let ghostY = currentPiece.y;
+    while (!collide(0, ghostY - currentPiece.y + 1)) {
+        ghostY++;
+    }
+    
+    currentPiece.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                const blockX = currentPiece.x + x;
+                const blockY = ghostY + y;
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.fillRect(blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(blockX * BLOCK_SIZE + 1, blockY * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+            }
+        });
+    });
+}
+
+function drawNextPiece() {
+    nextCtx.fillStyle = '#1a1a1a';
+    nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+    
+    if (!nextPiece) return;
+    
+    const blockSize = 25;
+    const offsetX = (nextCanvas.width - nextPiece.shape[0].length * blockSize) / 2 / blockSize;
+    const offsetY = (nextCanvas.height - nextPiece.shape.length * blockSize) / 2 / blockSize;
+    
+    nextPiece.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                drawBlock(nextCtx, offsetX + x, offsetY + y, COLORS[nextPiece.color], blockSize);
+            }
+        });
+    });
+}
+
+function drawHoldPiece() {
+    holdCtx.fillStyle = '#1a1a1a';
+    holdCtx.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
+    
+    if (!holdPiece) return;
+    
+    const blockSize = 25;
+    const offsetX = (holdCanvas.width - holdPiece.shape[0].length * blockSize) / 2 / blockSize;
+    const offsetY = (holdCanvas.height - holdPiece.shape.length * blockSize) / 2 / blockSize;
+    
+    holdPiece.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                drawBlock(holdCtx, offsetX + x, offsetY + y, COLORS[holdPiece.color], blockSize);
+            }
+        });
+    });
+}
+
+// Collision detection
+function collide(offsetX = 0, offsetY = 0) {
+    for (let y = 0; y < currentPiece.shape.length; y++) {
+        for (let x = 0; x < currentPiece.shape[y].length; x++) {
+            if (currentPiece.shape[y][x]) {
+                const newX = currentPiece.x + x + offsetX;
+                const newY = currentPiece.y + y + offsetY;
+                
+                if (newX < 0 || newX >= COLS || newY >= ROWS) return true;
+                if (newY >= 0 && board[newY][newX]) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Merge piece to board
+function merge() {
+    currentPiece.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                const boardY = currentPiece.y + y;
+                const boardX = currentPiece.x + x;
+                if (boardY >= 0) {
+                    board[boardY][boardX] = currentPiece.color;
+                }
+            }
+        });
+    });
+    playSound(sounds.hit);
+}
+
+// Rotate piece
+function rotate() {
+    const rotated = currentPiece.shape[0].map((_, i) =>
+        currentPiece.shape.map(row => row[i]).reverse()
+    );
+    
+    const oldShape = currentPiece.shape;
+    currentPiece.shape = rotated;
+    
+    let offset = 0;
+    while (collide()) {
+        currentPiece.x += offset;
+        offset = -(offset + (offset > 0 ? 1 : -1));
+        if (offset > rotated[0].length) {
+            currentPiece.shape = oldShape;
+            return;
+        }
+    }
+    
+    playSound(sounds.rotate);
+}
+
+// Hold piece
+function holdCurrentPiece() {
+    if (!canHold) return;
+    
+    if (holdPiece === null) {
+        holdPiece = {
+            shape: PIECES[currentPiece.color].map(row => [...row]),
+            color: currentPiece.color
+        };
+        currentPiece = nextPiece;
+        nextPiece = createPiece();
+    } else {
+        const temp = {
+            shape: PIECES[currentPiece.color].map(row => [...row]),
+            color: currentPiece.color
+        };
+        currentPiece = {
+            shape: holdPiece.shape.map(row => [...row]),
+            color: holdPiece.color,
+            x: Math.floor(COLS / 2) - Math.floor(holdPiece.shape[0].length / 2),
+            y: 0
+        };
+        holdPiece = temp;
+    }
+    
+    canHold = false;
+    drawHoldPiece();
+}
+
+// Clear completed lines
+function clearLines() {
+    let cleared = 0;
+    
+    for (let y = ROWS - 1; y >= 0; y--) {
+        if (board[y].every(cell => cell !== 0)) {
+            board.splice(y, 1);
+            board.unshift(Array(COLS).fill(0));
+            cleared++;
+            y++;
+        }
+    }
+    
+    if (cleared > 0) {
+        lines += cleared;
+        score += cleared * 10;
+        
+        // Wave progression every 50 lines
+        const newWave = Math.floor(lines / LINES_PER_WAVE) + 1;
+        if (newWave > wave) {
+            wave = newWave;
+            dropInterval = Math.max(100, INITIAL_DROP_INTERVAL - (wave - 1) * SPEED_INCREASE_PER_WAVE);
+            gameMessage.textContent = `WAVE ${wave}! Speed increased!`;
+            setTimeout(() => {
+                if (running) gameMessage.textContent = 'Keep going!';
+            }, 2000);
+        }
+        
+        playSound(sounds.complete);
+        updateUI();
+        
+        if (score >= TARGET_SCORE && !hasReachedTarget) {
+            hasReachedTarget = true;
+            winGame();
+        }
+    }
+}
+
+// Drop piece
+function drop() {
+    currentPiece.y++;
+    
+    if (collide()) {
+        currentPiece.y--;
+        merge();
+        clearLines();
+        
+        currentPiece = nextPiece;
+        nextPiece = createPiece();
+        canHold = true;
+        
+        drawNextPiece();
+        
+        if (collide()) {
+            gameOver();
+        }
+    }
+}
+
+// Hard drop
+function hardDrop() {
+    while (!collide(0, 1)) {
+        currentPiece.y++;
+    }
+    
+    merge();
+    clearLines();
+    
+    currentPiece = nextPiece;
+    nextPiece = createPiece();
+    canHold = true;
+    
+    drawNextPiece();
+    
+    if (collide()) {
+        gameOver();
+    }
+}
+
+// Move piece
+function move(dir) {
+    currentPiece.x += dir;
+    if (collide()) {
+        currentPiece.x -= dir;
+    }
+}
+
+// Update UI
+function updateUI() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('lines').textContent = lines;
+    document.getElementById('wave').textContent = wave;
+}
+
+// Play sound
+function playSound(audio) {
+    audio.currentTime = 0;
+    audio.play().catch(e => console.log('Audio play failed:', e));
+}
+
+// Game loop
+function gameLoop(time = 0) {
+    if (!running) return;
+    
+    const deltaTime = time - lastTime;
+    lastTime = time;
+    dropCounter += deltaTime;
+    
+    if (dropCounter > dropInterval) {
+        drop();
+        dropCounter = 0;
+    }
+    
+    drawBoard();
+    drawGhostPiece();
+    drawPiece();
+    
+    requestAnimationFrame(gameLoop);
+}
+
+// Start game
+function startGame() {
+    board = createBoard();
+    score = 0;
+    lines = 0;
+    wave = 1;
+    dropInterval = INITIAL_DROP_INTERVAL;
+    dropCounter = 0;
+    hasReachedTarget = false;
+    
+    currentPiece = createPiece();
+    nextPiece = createPiece();
+    holdPiece = null;
+    canHold = true;
+    running = true;
+    
+    updateUI();
+    drawNextPiece();
+    drawHoldPiece();
+    
+    startOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+    winOverlay.classList.add('hidden');
+    finalWinOverlay.classList.add('hidden');
+    
+    gameMessage.textContent = 'Good luck!';
+    
+    sounds.background.volume = 0.3;
+    playSound(sounds.background);
+    
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+// Game over
+function gameOver() {
+    running = false;
+    sounds.background.pause();
+    sounds.background.currentTime = 0;
+    playSound(sounds.lose);
+    
+    document.getElementById('finalScore').textContent = `Score: ${score}`;
+    gameOverOverlay.classList.remove('hidden');
+    gameMessage.textContent = 'Game Over! Try again?';
+    
+    // Check if score qualifies for leaderboard
+    checkLeaderboardQualification(score);
+}
+
+// Win game (reached 5000)
+function winGame() {
+    running = false;
+    sounds.background.pause();
+    playSound(sounds.win);
+    
+    document.getElementById('winScore').textContent = `Score: ${score}`;
+    winOverlay.classList.remove('hidden');
+    gameMessage.textContent = 'You won!';
+}
+
+// Continue after winning
+function continueGame() {
+    document.getElementById('countdown').classList.remove('hidden');
+    continueBtn.disabled = true;
+    finishBtn.disabled = true;
+    
+    let count = 5;
+    document.getElementById('countdownNum').textContent = count;
+    
+    const countdown = setInterval(() => {
+        count--;
+        if (count > 0) {
+            document.getElementById('countdownNum').textContent = count;
+        } else {
+            clearInterval(countdown);
+            winOverlay.classList.add('hidden');
+            document.getElementById('countdown').classList.add('hidden');
+            continueBtn.disabled = false;
+            finishBtn.disabled = false;
+            
+            running = true;
+            gameMessage.textContent = 'Keep going for a higher score!';
+            sounds.background.currentTime = 0;
+            playSound(sounds.background);
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+    }, 1000);
+}
+
+// Finish with 5000 score
+function finishGame() {
+    winOverlay.classList.add('hidden');
+    document.getElementById('legendScore').textContent = `Score: ${score}`;
+    finalWinOverlay.classList.remove('hidden');
+    gameMessage.textContent = 'Congratulations, legend!';
+    
+    checkLeaderboardQualification(score);
+}
+
+// Keyboard controls
+document.addEventListener('keydown', e => {
+    if (!running) return;
+    
+    if (['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', ' ', 'Shift'].includes(e.key)) {
+        e.preventDefault();
+    }
+    
+    if (!keysPressed[e.key]) {
+        keysPressed[e.key] = true;
+        
+        switch(e.key) {
+            case 'ArrowLeft':
+                move(-1);
+                break;
+            case 'ArrowRight':
+                move(1);
+                break;
+            case 'ArrowDown':
+                drop();
+                dropCounter = 0;
+                break;
+            case 'ArrowUp':
+                rotate();
+                break;
+            case 'Shift':
+                holdCurrentPiece();
+                break;
+            case ' ':
+                hardDrop();
+                dropCounter = 0;
+                break;
+        }
+    }
+});
+
+document.addEventListener('keyup', e => {
+    keysPressed[e.key] = false;
+});
+
+// Event listeners
+startBtn.addEventListener('click', startGame);
+retryBtn.addEventListener('click', startGame);
+continueBtn.addEventListener('click', continueGame);
+finishBtn.addEventListener('click', finishGame);
+finalRetryBtn.addEventListener('click', startGame);
+
+// Initialize game
+init();
