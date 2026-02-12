@@ -3,7 +3,7 @@ const COLS = 10;
 const ROWS = 20;
 const BLOCK_SIZE = 30;
 const TARGET_SCORE = 5000;
-const LINES_PER_WAVE = 15; // Changed from 50 to 15
+const LINES_PER_WAVE = 15;
 const INITIAL_DROP_INTERVAL = 1000;
 const SPEED_INCREASE_PER_WAVE = 50;
 
@@ -41,13 +41,21 @@ const holdCtx = holdCanvas.getContext('2d');
 
 // Audio Elements
 const sounds = {
+    menu: document.getElementById('menuMusic'),
     background: document.getElementById('backgroundMusic'),
     hit: document.getElementById('hitSound'),
     rotate: document.getElementById('rotateSound'),
     complete: document.getElementById('completeSound'),
+    milestone2k: document.getElementById('milestone2k'),
+    milestone1k: document.getElementById('milestone1k'),
     win: document.getElementById('winSound'),
     lose: document.getElementById('loseSound')
 };
+
+// Music milestone tracking
+let milestone3kPlayed = false;
+let milestone4kPlayed = false;
+let milestone5kPlayed = false;
 
 // Game State
 let board = [];
@@ -83,6 +91,10 @@ function init() {
     updateUI();
     drawBoard();
     loadLeaderboard();
+    
+    // Start menu music
+    sounds.menu.volume = 0.3;
+    playSound(sounds.menu);
 }
 
 // Create empty board
@@ -287,6 +299,45 @@ function holdCurrentPiece() {
     drawHoldPiece();
 }
 
+// Music milestone management
+function checkMusicMilestones() {
+    // At 3000 points - play 2kremaining.mp3
+    if (score >= 3000 && !milestone3kPlayed) {
+        milestone3kPlayed = true;
+        stopAllMusic();
+        sounds.milestone2k.volume = 0.3;
+        sounds.milestone2k.loop = true;
+        playSound(sounds.milestone2k);
+        gameMessage.textContent = '2000 points to victory!';
+        setTimeout(() => {
+            if (running) gameMessage.textContent = 'Keep going!';
+        }, 2000);
+    }
+    
+    // At 4000 points - play 1kremaining.mp3
+    if (score >= 4000 && !milestone4kPlayed) {
+        milestone4kPlayed = true;
+        stopAllMusic();
+        sounds.milestone1k.volume = 0.3;
+        sounds.milestone1k.loop = true;
+        playSound(sounds.milestone1k);
+        gameMessage.textContent = '1000 points to victory!';
+        setTimeout(() => {
+            if (running) gameMessage.textContent = 'Almost there!';
+        }, 2000);
+    }
+}
+
+// Stop all music
+function stopAllMusic() {
+    Object.values(sounds).forEach(sound => {
+        if (sound.tagName === 'AUDIO' && (sound.id.includes('Music') || sound.id.includes('milestone'))) {
+            sound.pause();
+            sound.currentTime = 0;
+        }
+    });
+}
+
 // Clear completed lines
 function clearLines() {
     let cleared = 0;
@@ -304,15 +355,20 @@ function clearLines() {
         lines += cleared;
         score += cleared * 10;
         
+        // Check music milestones
+        checkMusicMilestones();
+        
         // Wave progression every 15 lines
         const newWave = Math.floor(lines / LINES_PER_WAVE) + 1;
         if (newWave > wave) {
             wave = newWave;
             dropInterval = Math.max(100, INITIAL_DROP_INTERVAL - (wave - 1) * SPEED_INCREASE_PER_WAVE);
-            gameMessage.textContent = `WAVE ${wave}! Speed increased!`;
-            setTimeout(() => {
-                if (running) gameMessage.textContent = 'Keep going!';
-            }, 2000);
+            if (score < 3000) {
+                gameMessage.textContent = `WAVE ${wave}! Speed increased!`;
+                setTimeout(() => {
+                    if (running && score < 3000) gameMessage.textContent = 'Keep going!';
+                }, 2000);
+            }
         }
         
         playSound(sounds.complete);
@@ -320,6 +376,7 @@ function clearLines() {
         
         if (score >= TARGET_SCORE && !hasReachedTarget) {
             hasReachedTarget = true;
+            milestone5kPlayed = true;
             winGame();
         }
     }
@@ -416,6 +473,9 @@ function startGame() {
     dropInterval = INITIAL_DROP_INTERVAL;
     dropCounter = 0;
     hasReachedTarget = false;
+    milestone3kPlayed = false;
+    milestone4kPlayed = false;
+    milestone5kPlayed = false;
     
     currentPiece = createPiece();
     nextPiece = createPiece();
@@ -434,7 +494,10 @@ function startGame() {
     
     gameMessage.textContent = 'Good luck!';
     
+    // Stop menu music and start game music
+    stopAllMusic();
     sounds.background.volume = 0.3;
+    sounds.background.loop = true;
     playSound(sounds.background);
     
     lastTime = performance.now();
@@ -444,9 +507,14 @@ function startGame() {
 // Game over
 function gameOver() {
     running = false;
-    sounds.background.pause();
-    sounds.background.currentTime = 0;
-    playSound(sounds.lose);
+    stopAllMusic();
+    
+    // If player reached 5000 points but then lost, play win music
+    if (hasReachedTarget) {
+        playSound(sounds.win);
+    } else {
+        playSound(sounds.lose);
+    }
     
     document.getElementById('finalScore').textContent = `Score: ${score}`;
     gameOverOverlay.classList.remove('hidden');
@@ -459,7 +527,9 @@ function gameOver() {
 // Win game (reached 5000)
 function winGame() {
     running = false;
-    sounds.background.pause();
+    stopAllMusic();
+    sounds.win.volume = 0.3;
+    sounds.win.loop = true;
     playSound(sounds.win);
     
     document.getElementById('winScore').textContent = `Score: ${score}`;
@@ -489,8 +559,11 @@ function continueGame() {
             
             running = true;
             gameMessage.textContent = 'Keep going for a higher score!';
-            sounds.background.currentTime = 0;
-            playSound(sounds.background);
+            
+            // Continue with win music
+            sounds.win.currentTime = 0;
+            playSound(sounds.win);
+            
             lastTime = performance.now();
             requestAnimationFrame(gameLoop);
         }
