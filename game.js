@@ -114,6 +114,28 @@ function createPiece() {
     };
 }
 
+// Draw grid lines
+function drawGrid() {
+    ctx.strokeStyle = 'rgba(100, 100, 150, 0.15)';
+    ctx.lineWidth = 1;
+    
+    // Draw vertical lines
+    for (let x = 0; x <= COLS; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * BLOCK_SIZE, 0);
+        ctx.lineTo(x * BLOCK_SIZE, ROWS * BLOCK_SIZE);
+        ctx.stroke();
+    }
+    
+    // Draw horizontal lines
+    for (let y = 0; y <= ROWS; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * BLOCK_SIZE);
+        ctx.lineTo(COLS * BLOCK_SIZE, y * BLOCK_SIZE);
+        ctx.stroke();
+    }
+}
+
 // Draw functions
 function drawBlock(context, x, y, color, blockSize = BLOCK_SIZE) {
     if (!color) return;
@@ -135,6 +157,9 @@ function drawBoard() {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
+    // Draw grid first
+    drawGrid();
+    
     board.forEach((row, y) => {
         row.forEach((value, x) => {
             if (value) drawBlock(ctx, x, y, COLORS[value]);
@@ -153,13 +178,73 @@ function drawPiece() {
     });
 }
 
-function drawGhostPiece() {
-    if (!currentPiece) return;
+// Get ghost piece Y position
+function getGhostY() {
+    if (!currentPiece) return 0;
     
     let ghostY = currentPiece.y;
     while (!collide(0, ghostY - currentPiece.y + 1)) {
         ghostY++;
     }
+    return ghostY;
+}
+
+// Draw highlight beams from current piece to ghost
+function drawHighlightBeams() {
+    if (!currentPiece) return;
+    
+    const ghostY = getGhostY();
+    
+    // Only draw beams if there's a drop distance
+    if (ghostY <= currentPiece.y) return;
+    
+    currentPiece.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                const blockX = currentPiece.x + x;
+                const currentBlockY = currentPiece.y + y;
+                const ghostBlockY = ghostY + y;
+                
+                // Create vertical gradient beam
+                const gradient = ctx.createLinearGradient(
+                    blockX * BLOCK_SIZE + BLOCK_SIZE / 2,
+                    currentBlockY * BLOCK_SIZE,
+                    blockX * BLOCK_SIZE + BLOCK_SIZE / 2,
+                    ghostBlockY * BLOCK_SIZE
+                );
+                
+                gradient.addColorStop(0, 'rgba(255, 255, 150, 0.3)');
+                gradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.15)');
+                gradient.addColorStop(1, 'rgba(255, 255, 150, 0.05)');
+                
+                ctx.fillStyle = gradient;
+                
+                // Draw beam from bottom of current piece to top of ghost
+                ctx.fillRect(
+                    blockX * BLOCK_SIZE + 3,
+                    currentBlockY * BLOCK_SIZE + BLOCK_SIZE,
+                    BLOCK_SIZE - 6,
+                    (ghostBlockY - currentBlockY) * BLOCK_SIZE - BLOCK_SIZE
+                );
+                
+                // Add glowing edges
+                ctx.strokeStyle = 'rgba(255, 255, 200, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    blockX * BLOCK_SIZE + 3,
+                    currentBlockY * BLOCK_SIZE + BLOCK_SIZE,
+                    BLOCK_SIZE - 6,
+                    (ghostBlockY - currentBlockY) * BLOCK_SIZE - BLOCK_SIZE
+                );
+            }
+        });
+    });
+}
+
+function drawGhostPiece() {
+    if (!currentPiece) return;
+    
+    const ghostY = getGhostY();
     
     currentPiece.shape.forEach((row, y) => {
         row.forEach((value, x) => {
@@ -167,12 +252,21 @@ function drawGhostPiece() {
                 const blockX = currentPiece.x + x;
                 const blockY = ghostY + y;
                 
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                // Draw glow effect
+                ctx.shadowColor = 'rgba(255, 255, 150, 0.5)';
+                ctx.shadowBlur = 10;
+                
+                // Draw ghost block with subtle fill
+                ctx.fillStyle = 'rgba(255, 255, 150, 0.08)';
                 ctx.fillRect(blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
                 
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                // Draw border
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
                 ctx.lineWidth = 2;
-                ctx.strokeRect(blockX * BLOCK_SIZE + 1, blockY * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                ctx.strokeRect(blockX * BLOCK_SIZE + 2, blockY * BLOCK_SIZE + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
+                
+                // Reset shadow
+                ctx.shadowBlur = 0;
             }
         });
     });
@@ -458,6 +552,7 @@ function gameLoop(time = 0) {
     }
     
     drawBoard();
+    drawHighlightBeams();  // Draw beams before ghost and current piece
     drawGhostPiece();
     drawPiece();
     
@@ -494,8 +589,19 @@ function startGame() {
     
     gameMessage.textContent = 'Good luck!';
     
-    // Stop menu music and start game music
-    stopAllMusic();
+    // Stop ALL music including menu music explicitly
+    sounds.menu.pause();
+    sounds.menu.currentTime = 0;
+    sounds.background.pause();
+    sounds.background.currentTime = 0;
+    sounds.milestone2k.pause();
+    sounds.milestone2k.currentTime = 0;
+    sounds.milestone1k.pause();
+    sounds.milestone1k.currentTime = 0;
+    sounds.win.pause();
+    sounds.win.currentTime = 0;
+    
+    // Start game music
     sounds.background.volume = 0.3;
     sounds.background.loop = true;
     playSound(sounds.background);
