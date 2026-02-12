@@ -1,138 +1,163 @@
-// Leaderboard functionality using localStorage
-const LEADERBOARD_KEY = 'tetrisLeaderboard';
+// Global Leaderboard System using Persistent Storage
+// This allows all players to see and compete on the same leaderboard!
+
 const MAX_LEADERBOARD_ENTRIES = 10;
+const LEADERBOARD_KEY = 'tetris-global-leaderboard';
 
-// Load leaderboard from localStorage
-function getLeaderboard() {
-    const data = localStorage.getItem(LEADERBOARD_KEY);
-    if (data) {
-        try {
-            return JSON.parse(data);
-        } catch (e) {
-            console.error('Error parsing leaderboard:', e);
-            return [];
-        }
-    }
-    return [];
-}
-
-// Save leaderboard to localStorage
-function saveLeaderboard(leaderboard) {
+// Load global leaderboard
+async function loadLeaderboard() {
+    const leaderboardDiv = document.getElementById('leaderboard');
+    
     try {
-        localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
-    } catch (e) {
-        console.error('Error saving leaderboard:', e);
+        leaderboardDiv.innerHTML = '<div class="leaderboard-item loading">Loading global leaderboard...</div>';
+        
+        // Get shared leaderboard data
+        const result = await window.storage.get(LEADERBOARD_KEY, true);
+        
+        let leaderboard = [];
+        if (result && result.value) {
+            leaderboard = JSON.parse(result.value);
+        }
+        
+        displayLeaderboard(leaderboard);
+    } catch (error) {
+        console.log('Loading leaderboard...', error);
+        // If key doesn't exist yet, show empty leaderboard
+        displayLeaderboard([]);
     }
 }
 
 // Display leaderboard
-function loadLeaderboard() {
-    const leaderboard = getLeaderboard();
-    const leaderboardEl = document.getElementById('leaderboard');
+function displayLeaderboard(leaderboard) {
+    const leaderboardDiv = document.getElementById('leaderboard');
     
-    if (leaderboard.length === 0) {
-        leaderboardEl.innerHTML = '<div class="leaderboard-item empty">No scores yet. Be the first!</div>';
+    if (!leaderboard || leaderboard.length === 0) {
+        leaderboardDiv.innerHTML = `
+            <div class="leaderboard-item empty">
+                No scores yet. Be the first to make the leaderboard!
+            </div>
+        `;
         return;
     }
     
-    leaderboardEl.innerHTML = '';
-    
-    leaderboard.slice(0, MAX_LEADERBOARD_ENTRIES).forEach((entry, index) => {
-        const item = document.createElement('div');
-        item.className = `leaderboard-item rank-${index + 1}`;
+    leaderboardDiv.innerHTML = leaderboard.map((entry, index) => {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+        const date = new Date(entry.timestamp).toLocaleDateString();
         
-        item.innerHTML = `
-            <div class="player-info">
-                <div class="player-rank">#${index + 1}</div>
-                <div class="player-name">${escapeHtml(entry.name)}</div>
+        return `
+            <div class="leaderboard-item ${index < 3 ? 'top-three' : ''}">
+                <span class="rank">${medal}</span>
+                <span class="player-name">${entry.name}</span>
+                <span class="player-score">${entry.score}</span>
+                <span class="player-date">${date}</span>
             </div>
-            <div class="player-score">${entry.score}</div>
         `;
-        
-        leaderboardEl.appendChild(item);
-    });
+    }).join('');
 }
 
 // Check if score qualifies for leaderboard
-function checkLeaderboardQualification(score) {
-    const leaderboard = getLeaderboard();
-    
-    // Always qualify if less than 10 entries
-    if (leaderboard.length < MAX_LEADERBOARD_ENTRIES) {
-        showNameModal(score);
-        return;
-    }
-    
-    // Check if score is higher than lowest entry
-    const lowestScore = leaderboard[leaderboard.length - 1].score;
-    if (score > lowestScore) {
-        showNameModal(score);
+async function checkLeaderboardQualification(score) {
+    try {
+        const result = await window.storage.get(LEADERBOARD_KEY, true);
+        let leaderboard = [];
+        
+        if (result && result.value) {
+            leaderboard = JSON.parse(result.value);
+        }
+        
+        // Check if score qualifies
+        const qualifies = leaderboard.length < MAX_LEADERBOARD_ENTRIES || 
+                         score > leaderboard[leaderboard.length - 1]?.score || 0;
+        
+        if (qualifies) {
+            showNameInputModal(score);
+        }
+    } catch (error) {
+        console.log('Checking qualification...', error);
+        // If no leaderboard exists yet, any score qualifies
+        showNameInputModal(score);
     }
 }
 
 // Show name input modal
-function showNameModal(score) {
+function showNameInputModal(score) {
     const modal = document.getElementById('nameModal');
-    const nameInput = document.getElementById('playerName');
+    const playerNameInput = document.getElementById('playerName');
     const submitBtn = document.getElementById('submitName');
     const skipBtn = document.getElementById('skipName');
     
     modal.classList.remove('hidden');
-    nameInput.value = '';
-    nameInput.focus();
+    playerNameInput.value = '';
+    playerNameInput.focus();
     
-    const submitScore = () => {
-        const name = nameInput.value.trim() || 'Anonymous';
-        addToLeaderboard(name, score);
-        modal.classList.add('hidden');
-    };
-    
-    const skipScore = () => {
-        modal.classList.add('hidden');
-    };
-    
-    // Remove old listeners
+    // Remove old event listeners
     const newSubmitBtn = submitBtn.cloneNode(true);
     submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
     const newSkipBtn = skipBtn.cloneNode(true);
     skipBtn.parentNode.replaceChild(newSkipBtn, skipBtn);
     
-    // Add new listeners
-    newSubmitBtn.addEventListener('click', submitScore);
-    newSkipBtn.addEventListener('click', skipScore);
+    // Add new event listeners
+    newSubmitBtn.addEventListener('click', () => submitScore(score));
+    newSkipBtn.addEventListener('click', () => modal.classList.add('hidden'));
     
-    nameInput.addEventListener('keypress', (e) => {
+    // Submit on Enter key
+    playerNameInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
-            submitScore();
+            submitScore(score);
         }
     });
 }
 
-// Add score to leaderboard
-function addToLeaderboard(name, score) {
-    const leaderboard = getLeaderboard();
+// Submit score to global leaderboard
+async function submitScore(score) {
+    const playerNameInput = document.getElementById('playerName');
+    const modal = document.getElementById('nameModal');
+    const name = playerNameInput.value.trim() || 'Anonymous';
     
-    leaderboard.push({
-        name: name,
-        score: score,
-        date: new Date().toISOString()
-    });
-    
-    // Sort by score descending
-    leaderboard.sort((a, b) => b.score - a.score);
-    
-    // Keep only top 10
-    const trimmed = leaderboard.slice(0, MAX_LEADERBOARD_ENTRIES);
-    
-    saveLeaderboard(trimmed);
-    loadLeaderboard();
-}
-
-// Escape HTML to prevent XSS
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    try {
+        // Get current leaderboard
+        let leaderboard = [];
+        try {
+            const result = await window.storage.get(LEADERBOARD_KEY, true);
+            if (result && result.value) {
+                leaderboard = JSON.parse(result.value);
+            }
+        } catch (error) {
+            console.log('Creating new leaderboard...', error);
+        }
+        
+        // Add new entry
+        const newEntry = {
+            name: name,
+            score: score,
+            timestamp: Date.now()
+        };
+        
+        leaderboard.push(newEntry);
+        
+        // Sort by score (highest first)
+        leaderboard.sort((a, b) => b.score - a.score);
+        
+        // Keep only top entries
+        leaderboard = leaderboard.slice(0, MAX_LEADERBOARD_ENTRIES);
+        
+        // Save to shared storage
+        await window.storage.set(LEADERBOARD_KEY, JSON.stringify(leaderboard), true);
+        
+        // Close modal and refresh display
+        modal.classList.add('hidden');
+        displayLeaderboard(leaderboard);
+        
+        // Show success message
+        gameMessage.textContent = `🎉 ${name}, you're on the global leaderboard!`;
+        setTimeout(() => {
+            if (!running) gameMessage.textContent = 'Try again to beat your score!';
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Failed to save score:', error);
+        alert('Failed to save score to leaderboard. Please try again.');
+    }
 }
 
 // Initialize leaderboard on page load
