@@ -73,6 +73,9 @@ let lastTime = 0;
 let dropCounter = 0;
 let hasReachedTarget = false;
 let keysPressed = {};
+let moveDelay = 150; // Initial delay before repeat starts (ms)
+let moveInterval = 50; // Interval between repeated moves (ms)
+let moveTimers = {}; // Track timers for each key
 
 // UI Elements
 const startBtn = document.getElementById('startBtn');
@@ -216,10 +219,10 @@ function drawHighlightBeams() {
                     ghostBlockY * BLOCK_SIZE
                 );
                 
-                // Very subtle gradient - barely visible
-                gradient.addColorStop(0, 'rgba(255, 255, 150, 0.08)');
-                gradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.04)');
-                gradient.addColorStop(1, 'rgba(255, 255, 150, 0.02)');
+                // Extremely subtle gradient - barely perceptible
+                gradient.addColorStop(0, 'rgba(255, 255, 150, 0.02)');
+                gradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.01)');
+                gradient.addColorStop(1, 'rgba(255, 255, 150, 0.005)');
                 
                 ctx.fillStyle = gradient;
                 
@@ -233,8 +236,8 @@ function drawHighlightBeams() {
                         beamHeight
                     );
                     
-                    // Very subtle glowing edges
-                    ctx.strokeStyle = 'rgba(255, 255, 200, 0.1)';
+                    // Nearly invisible edges
+                    ctx.strokeStyle = 'rgba(255, 255, 200, 0.03)';
                     ctx.lineWidth = 1;
                     ctx.strokeRect(
                         blockX * BLOCK_SIZE + 5,
@@ -694,7 +697,7 @@ function finishGame() {
     checkLeaderboardQualification(score);
 }
 
-// Keyboard controls
+// Keyboard controls with smooth movement
 document.addEventListener('keydown', e => {
     if (!running) return;
     
@@ -702,36 +705,66 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
     }
     
-    if (!keysPressed[e.key]) {
-        keysPressed[e.key] = true;
-        
-        switch(e.key) {
-            case 'ArrowLeft':
-                move(-1);
-                break;
-            case 'ArrowRight':
-                move(1);
-                break;
-            case 'ArrowDown':
-                drop();
-                dropCounter = 0;
-                break;
-            case 'ArrowUp':
-                rotate();
-                break;
-            case 'Shift':
-                holdCurrentPiece();
-                break;
-            case ' ':
-                hardDrop();
-                dropCounter = 0;
-                break;
-        }
+    // If key is already being pressed, ignore (prevents key repeat from OS)
+    if (keysPressed[e.key]) return;
+    
+    keysPressed[e.key] = true;
+    
+    // Handle immediate action
+    switch(e.key) {
+        case 'ArrowLeft':
+            move(-1);
+            // Start smooth repeat after delay
+            moveTimers[e.key] = setTimeout(() => {
+                moveTimers[e.key] = setInterval(() => {
+                    if (running && keysPressed['ArrowLeft']) move(-1);
+                }, moveInterval);
+            }, moveDelay);
+            break;
+        case 'ArrowRight':
+            move(1);
+            // Start smooth repeat after delay
+            moveTimers[e.key] = setTimeout(() => {
+                moveTimers[e.key] = setInterval(() => {
+                    if (running && keysPressed['ArrowRight']) move(1);
+                }, moveInterval);
+            }, moveDelay);
+            break;
+        case 'ArrowDown':
+            drop();
+            dropCounter = 0;
+            // Start smooth repeat after delay
+            moveTimers[e.key] = setTimeout(() => {
+                moveTimers[e.key] = setInterval(() => {
+                    if (running && keysPressed['ArrowDown']) {
+                        drop();
+                        dropCounter = 0;
+                    }
+                }, moveInterval);
+            }, moveDelay);
+            break;
+        case 'ArrowUp':
+            rotate();
+            break;
+        case 'Shift':
+            holdCurrentPiece();
+            break;
+        case ' ':
+            hardDrop();
+            dropCounter = 0;
+            break;
     }
 });
 
 document.addEventListener('keyup', e => {
     keysPressed[e.key] = false;
+    
+    // Clear any timers for this key
+    if (moveTimers[e.key]) {
+        clearTimeout(moveTimers[e.key]);
+        clearInterval(moveTimers[e.key]);
+        delete moveTimers[e.key];
+    }
 });
 
 // Event listeners
