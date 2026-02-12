@@ -49,7 +49,8 @@ const sounds = {
     milestone2k: document.getElementById('milestone2k'),
     milestone1k: document.getElementById('milestone1k'),
     win: document.getElementById('winSound'),
-    lose: document.getElementById('loseSound')
+    lose: document.getElementById('loseSound'),
+    stored: document.getElementById('storedSound')
 };
 
 // Music milestone tracking
@@ -396,6 +397,7 @@ function holdCurrentPiece() {
     }
     
     canHold = false;
+    playSound(sounds.stored);
     drawHoldPiece();
 }
 
