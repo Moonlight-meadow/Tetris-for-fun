@@ -185,6 +185,33 @@
         <source src="lose.mp3" type="audio/mpeg">
     </audio>
 
+    <script>
+        // Play menu music on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            const menuMusic = document.getElementById('menuMusic');
+            
+            // Try to play immediately
+            menuMusic.play().catch(function(error) {
+                console.log('Autoplay blocked, waiting for user interaction...');
+                
+                // If autoplay is blocked, play on first user interaction
+                function playOnInteraction() {
+                    menuMusic.play().then(function() {
+                        console.log('Menu music started');
+                    }).catch(function(e) {
+                        console.log('Failed to play:', e);
+                    });
+                    
+                    // Remove listeners after first successful play
+                    document.removeEventListener('click', playOnInteraction);
+                    document.removeEventListener('keydown', playOnInteraction);
+                }
+                
+                document.addEventListener('click', playOnInteraction);
+                document.addEventListener('keydown', playOnInteraction);
+            });
+        });
+    </script>
     <script src="leaderboard.js"></script>
     <script src="game.js"></script>
 </body>
