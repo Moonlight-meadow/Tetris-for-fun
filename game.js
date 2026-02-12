@@ -3,9 +3,9 @@ const COLS = 10;
 const ROWS = 20;
 const BLOCK_SIZE = 30;
 const TARGET_SCORE = 5000;
-const LINES_PER_WAVE = 50;
+const LINES_PER_WAVE = 15; // Changed from 50 to 15
 const INITIAL_DROP_INTERVAL = 1000;
-const SPEED_INCREASE_PER_WAVE = 50; // Decreased speed increase per wave (was suggested 0.05 but using ms)
+const SPEED_INCREASE_PER_WAVE = 50;
 
 // Tetromino Colors
 const COLORS = [
@@ -304,7 +304,7 @@ function clearLines() {
         lines += cleared;
         score += cleared * 10;
         
-        // Wave progression every 50 lines
+        // Wave progression every 15 lines
         const newWave = Math.floor(lines / LINES_PER_WAVE) + 1;
         if (newWave > wave) {
             wave = newWave;
