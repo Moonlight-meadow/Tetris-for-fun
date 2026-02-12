@@ -75,6 +75,7 @@ let hasReachedTarget = false;
 let keysPressed = {};
 let moveDelay = 150; // Initial delay before repeat starts (ms)
 let moveInterval = 50; // Interval between repeated moves (ms)
+let downInterval = 30; // Faster interval for down arrow (ms)
 let moveTimers = {}; // Track timers for each key
 
 // UI Elements
@@ -733,15 +734,15 @@ document.addEventListener('keydown', e => {
         case 'ArrowDown':
             drop();
             dropCounter = 0;
-            // Start smooth repeat after delay
+            // Start fast repeat with minimal delay
             moveTimers[e.key] = setTimeout(() => {
                 moveTimers[e.key] = setInterval(() => {
                     if (running && keysPressed['ArrowDown']) {
                         drop();
                         dropCounter = 0;
                     }
-                }, moveInterval);
-            }, moveDelay);
+                }, downInterval); // Use faster interval for down
+            }, 50); // Shorter delay for down arrow
             break;
         case 'ArrowUp':
             rotate();
