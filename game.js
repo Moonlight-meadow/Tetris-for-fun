@@ -862,5 +862,19 @@ continueBtn.addEventListener('click', continueGame);
 finishBtn.addEventListener('click', finishGame);
 finalRetryBtn.addEventListener('click', startGame);
 
+// Sound toggle buttons - wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', () => {
+    const musicBtn = document.getElementById('musicToggle');
+    const sfxBtn = document.getElementById('sfxToggle');
+    
+    if (musicBtn) {
+        musicBtn.addEventListener('click', toggleMusic);
+    }
+    
+    if (sfxBtn) {
+        sfxBtn.addEventListener('click', toggleSFX);
+    }
+});
+
 // Initialize game
 init();
