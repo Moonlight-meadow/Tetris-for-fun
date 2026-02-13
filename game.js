@@ -549,8 +549,8 @@ function clearLines() {
         
         console.log('Lines cleared:', cleared, 'Points:', points, 'Combo:', comboCount);
         
-        // Show score particle (indicate if it's a combo)
-        createScoreParticle(points, comboCount > 1);
+        // Show score particle
+        createScoreParticle(points);
         
         // Show combo message
         if (comboCount > 1) {
@@ -660,16 +660,10 @@ function updateUI() {
 }
 
 // Create score particle effect
-function createScoreParticle(points, isCombo = false) {
+function createScoreParticle(points) {
     const particle = document.createElement('div');
     particle.className = 'score-particle';
-    
-    if (isCombo) {
-        particle.textContent = `🔥 +${points} 🔥`;
-        particle.style.fontSize = '56px';
-    } else {
-        particle.textContent = `+${points}`;
-    }
+    particle.textContent = `+${points}`;
     
     // Start from game canvas area
     const canvas = document.getElementById('gameCanvas');
@@ -683,7 +677,7 @@ function createScoreParticle(points, isCombo = false) {
     
     document.body.appendChild(particle);
     
-    console.log('Particle created:', points, isCombo ? '(COMBO!)' : '');
+    console.log('Particle created:', points);
     
     // Animate to score display
     requestAnimationFrame(() => {
@@ -700,8 +694,8 @@ function createScoreParticle(points, isCombo = false) {
         scoreElement.classList.add('score-flash');
         setTimeout(() => {
             scoreElement.classList.remove('score-flash');
-        }, 400);
-    }, 650);
+        }, 300);
+    }, 600);
     
     // Remove particle
     setTimeout(() => {
