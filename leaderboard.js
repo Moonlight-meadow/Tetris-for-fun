@@ -4,7 +4,7 @@ const MAX_LEADERBOARD_ENTRIES = 10;
 // IMPORTANT: Change this to your deployed server URL
 // For local testing: 'http://localhost:3000'
 // For production: 'https://your-app-name.onrender.com' or your deployed URL
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://tetris-for-fun.onrender.com';
 
 let leaderboardData = [];
 
