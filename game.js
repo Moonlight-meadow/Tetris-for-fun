@@ -54,6 +54,12 @@ const sounds = {
     stored: document.getElementById('storedSound')
 };
 
+// Sound settings
+let soundSettings = {
+    music: true,
+    sfx: true
+};
+
 // Music milestone tracking
 let milestone3kPlayed = false;
 let milestone4kPlayed = false;
@@ -104,6 +110,7 @@ function init() {
     updateUI();
     drawBoard();
     loadLeaderboard();
+    updateSoundButtons();
     
     sounds.menu.volume = 0.3;
     playSound(sounds.menu);
@@ -563,8 +570,67 @@ function updateUI() {
 
 // Play sound
 function playSound(audio) {
+    // Check if it's music or sound effect
+    const isMusicTrack = audio.id.includes('Music') || audio.id.includes('milestone') || audio.id === 'winSound';
+    
+    if (isMusicTrack && !soundSettings.music) {
+        return; // Don't play music if muted
+    }
+    
+    if (!isMusicTrack && !soundSettings.sfx) {
+        return; // Don't play sound effects if muted
+    }
+    
     audio.currentTime = 0;
     audio.play().catch(e => console.log('Audio play failed:', e));
+}
+
+// Toggle sound settings
+function toggleMusic() {
+    soundSettings.music = !soundSettings.music;
+    updateSoundButtons();
+    
+    if (!soundSettings.music) {
+        // Mute all music
+        sounds.menu.pause();
+        sounds.background.pause();
+        sounds.milestone2k.pause();
+        sounds.milestone1k.pause();
+        sounds.win.pause();
+    } else {
+        // Resume appropriate music based on game state
+        if (!running) {
+            playSound(sounds.menu);
+        } else if (running && !hasReachedTarget) {
+            if (score >= 4000) {
+                playSound(sounds.milestone1k);
+            } else if (score >= 3000) {
+                playSound(sounds.milestone2k);
+            } else {
+                playSound(sounds.background);
+            }
+        }
+    }
+}
+
+function toggleSFX() {
+    soundSettings.sfx = !soundSettings.sfx;
+    updateSoundButtons();
+}
+
+function updateSoundButtons() {
+    const musicBtn = document.getElementById('musicToggle');
+    const sfxBtn = document.getElementById('sfxToggle');
+    
+    if (musicBtn) {
+        musicBtn.textContent = soundSettings.music ? '🎵 Music: ON' : '🎵 Music: OFF';
+        musicBtn.style.opacity = soundSettings.music ? '1' : '0.5';
+    }
+    
+    if (sfxBtn) {
+        sfxBtn.textContent = soundSettings.sfx ? '🔊 SFX: ON' : '🔊 SFX: OFF';
+        sfxBtn.style.opacity = soundSettings.sfx ? '1' : '0.5';
+    }
 }
 
 // Game loop
