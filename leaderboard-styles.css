@@ -1,146 +1,175 @@
-/* Enhanced Leaderboard Styling */
+// GLOBAL LEADERBOARD - Uses Node.js Backend API
+const MAX_LEADERBOARD_ENTRIES = 10;
 
-.leaderboard-item {
-    display: grid;
-    grid-template-columns: 40px 1fr 80px 100px;
-    gap: 10px;
-    padding: 12px 15px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    margin-bottom: 8px;
-    align-items: center;
-    transition: all 0.3s ease;
+// IMPORTANT: Change this to your deployed server URL
+// For local testing: 'http://localhost:3000'
+// For production: 'https://your-app-name.onrender.com' or your deployed URL
+const API_URL = 'http://localhost:3000/api';
+
+let leaderboardData = [];
+
+// Load leaderboard from server
+async function loadLeaderboard() {
+    const leaderboardDiv = document.getElementById('leaderboard');
+    
+    if (!leaderboardDiv) {
+        return;
+    }
+    
+    try {
+        leaderboardDiv.innerHTML = '<div class="leaderboard-item loading">Loading global leaderboard...</div>';
+        
+        const response = await fetch(`${API_URL}/leaderboard`);
+        const data = await response.json();
+        
+        if (data.success) {
+            leaderboardData = data.scores;
+            console.log('✓ Loaded GLOBAL leaderboard:', leaderboardData.length, 'scores');
+            displayLeaderboard(leaderboardData);
+        } else {
+            throw new Error('Failed to load leaderboard');
+        }
+        
+    } catch (error) {
+        console.error('Error loading leaderboard:', error);
+        leaderboardDiv.innerHTML = `
+            <div class="leaderboard-item empty">
+                Unable to connect to leaderboard server
+            </div>
+        `;
+    }
 }
 
-.leaderboard-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-    transform: translateX(5px);
+// Display leaderboard
+function displayLeaderboard(leaderboard) {
+    const leaderboardDiv = document.getElementById('leaderboard');
+    
+    if (!leaderboard || leaderboard.length === 0) {
+        leaderboardDiv.innerHTML = `
+            <div class="leaderboard-item empty">
+                No scores yet. Be the first! 🌍
+            </div>
+        `;
+        return;
+    }
+    
+    leaderboardDiv.innerHTML = leaderboard.map((entry, index) => {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+        const date = new Date(entry.timestamp).toLocaleDateString();
+        
+        return `
+            <div class="leaderboard-item ${index < 3 ? 'top-three' : ''}">
+                <span class="rank">${medal}</span>
+                <span class="player-name">${entry.name}</span>
+                <span class="player-score">${entry.score}</span>
+                <span class="player-date">${date}</span>
+            </div>
+        `;
+    }).join('');
 }
 
-.leaderboard-item.top-three {
-    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 255, 255, 0.05));
-    border: 1px solid rgba(255, 215, 0, 0.3);
+// Check if score qualifies
+function checkLeaderboardQualification(score) {
+    if (!score || score === 0) {
+        return;
+    }
+    
+    showNameInputModal(score);
 }
 
-.leaderboard-item.loading,
-.leaderboard-item.empty {
-    grid-template-columns: 1fr;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.5);
-    font-style: italic;
+// Show name input modal
+function showNameInputModal(score) {
+    const modal = document.getElementById('nameModal');
+    const playerNameInput = document.getElementById('playerName');
+    
+    if (!modal) {
+        return;
+    }
+    
+    modal.classList.remove('hidden');
+    playerNameInput.value = '';
+    playerNameInput.focus();
+    
+    const submitHandler = async () => {
+        await submitScore(score);
+    };
+    
+    const skipHandler = () => {
+        modal.classList.add('hidden');
+    };
+    
+    const submitBtn = document.getElementById('submitName');
+    const skipBtn = document.getElementById('skipName');
+    
+    const newSubmitBtn = submitBtn.cloneNode(true);
+    submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+    newSubmitBtn.addEventListener('click', submitHandler);
+    
+    const newSkipBtn = skipBtn.cloneNode(true);
+    skipBtn.parentNode.replaceChild(newSkipBtn, skipBtn);
+    newSkipBtn.addEventListener('click', skipHandler);
+    
+    playerNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            submitHandler();
+        }
+    });
 }
 
-.rank {
-    font-size: 20px;
-    font-weight: bold;
-    text-align: center;
+// Submit score to server
+async function submitScore(score) {
+    const playerNameInput = document.getElementById('playerName');
+    const modal = document.getElementById('nameModal');
+    const submitBtn = document.getElementById('submitName');
+    const name = playerNameInput.value.trim() || 'Anonymous';
+    
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'SAVING...';
+    
+    try {
+        const response = await fetch(`${API_URL}/leaderboard`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name, score })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('✓ Score saved to GLOBAL leaderboard! Rank:', data.rank);
+            leaderboardData = data.scores;
+            
+            modal.classList.add('hidden');
+            displayLeaderboard(leaderboardData);
+            
+            // Show success message
+            const gameMessage = document.getElementById('gameMessage');
+            if (gameMessage) {
+                gameMessage.textContent = `🎉 ${name} ranked #${data.rank} with ${score} points!`;
+                setTimeout(() => {
+                    if (typeof running !== 'undefined' && !running) {
+                        gameMessage.textContent = 'Try again to beat your score!';
+                    }
+                }, 3000);
+            }
+        } else {
+            throw new Error(data.error || 'Failed to save score');
+        }
+        
+    } catch (error) {
+        console.error('Error saving score:', error);
+        alert('Failed to save score to global leaderboard. Please try again.');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'SUBMIT';
+    }
 }
 
-.player-name {
-    font-weight: 600;
-    color: #fff;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.player-score {
-    font-weight: bold;
-    color: #FFD93D;
-    text-align: right;
-}
-
-.player-date {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
-    text-align: right;
-}
-
-/* Modal Enhancements */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    backdrop-filter: blur(10px);
-}
-
-.modal.hidden {
-    display: none;
-}
-
-.modal-content {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    padding: 40px;
-    border-radius: 20px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    border: 2px solid rgba(255, 255, 255, 0.1);
-}
-
-.modal-content h2 {
-    margin-top: 0;
-    color: #FFD93D;
-    font-size: 28px;
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.modal-content p {
-    text-align: center;
-    color: rgba(255, 255, 255, 0.7);
-    margin-bottom: 25px;
-}
-
-#playerName {
-    width: 100%;
-    padding: 15px;
-    font-size: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
-    color: #fff;
-    margin-bottom: 20px;
-    box-sizing: border-box;
-    transition: all 0.3s ease;
-}
-
-#playerName:focus {
-    outline: none;
-    border-color: #FFD93D;
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.modal-buttons {
-    display: flex;
-    gap: 10px;
-}
-
-.modal-buttons .game-btn {
-    flex: 1;
-}
-
-.btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-/* Loading animation */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-.leaderboard-item.loading {
-    animation: pulse 1.5s ease-in-out infinite;
+// Initialize on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadLeaderboard);
+} else {
+    loadLeaderboard();
 }
