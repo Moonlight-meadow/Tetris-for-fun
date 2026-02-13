@@ -534,32 +534,43 @@ function clearLines() {
         if (cleared === 1) {
             points = 5;
         } else if (cleared === 2) {
-            points = 15; // Bonus for double
+            points = 15;
         } else if (cleared === 3) {
-            points = 30; // Big bonus for triple
+            points = 30;
         } else if (cleared === 4) {
-            points = 50; // Massive bonus for Tetris!
+            points = 50;
         }
         
-        // Combo bonus (add 50 points per combo after first clear)
+        // Combo bonus
         if (comboCount > 1) {
             points += 50;
+            console.log('COMBO x' + comboCount + '! +50 bonus points!');
         }
         
         score += points;
         
+        console.log('Lines cleared:', cleared, 'Points:', points, 'Combo:', comboCount);
+        
         // Show score particle
         createScoreParticle(points);
+        
+        // Show combo message
+        if (comboCount > 1) {
+            gameMessage.textContent = `🔥 COMBO x${comboCount}! +${points} points!`;
+            setTimeout(() => {
+                if (running && score < 3000) gameMessage.textContent = 'Keep going!';
+            }, 1500);
+        }
         
         // Check music milestones
         checkMusicMilestones();
         
-        // Wave progression every 15 lines
+        // Wave progression
         const newWave = Math.floor(lines / LINES_PER_WAVE) + 1;
         if (newWave > wave) {
             wave = newWave;
             dropInterval = Math.max(100, INITIAL_DROP_INTERVAL - (wave - 1) * SPEED_INCREASE_PER_WAVE);
-            if (score < 3000) {
+            if (score < 3000 && comboCount <= 1) {
                 gameMessage.textContent = `WAVE ${wave}! Speed increased!`;
                 setTimeout(() => {
                     if (running && score < 3000) gameMessage.textContent = 'Keep going!';
