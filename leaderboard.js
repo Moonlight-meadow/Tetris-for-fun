@@ -9,10 +9,12 @@ async function loadLeaderboard() {
     const leaderboardDiv = document.getElementById('leaderboard');
     
     try {
+        console.log('Loading leaderboard...');
         leaderboardDiv.innerHTML = '<div class="leaderboard-item loading">Loading global leaderboard...</div>';
         
         // Get shared leaderboard data
         const result = await window.storage.get(LEADERBOARD_KEY, true);
+        console.log('Leaderboard data loaded:', result);
         
         let leaderboard = [];
         if (result && result.value) {
@@ -21,8 +23,7 @@ async function loadLeaderboard() {
         
         displayLeaderboard(leaderboard);
     } catch (error) {
-        console.log('Loading leaderboard...', error);
-        // If key doesn't exist yet, show empty leaderboard
+        console.log('Leaderboard does not exist yet, creating new one...', error);
         displayLeaderboard([]);
     }
 }
@@ -57,34 +58,25 @@ function displayLeaderboard(leaderboard) {
 
 // Check if score qualifies for leaderboard
 async function checkLeaderboardQualification(score) {
-    try {
-        const result = await window.storage.get(LEADERBOARD_KEY, true);
-        let leaderboard = [];
-        
-        if (result && result.value) {
-            leaderboard = JSON.parse(result.value);
-        }
-        
-        // Check if score qualifies
-        const qualifies = leaderboard.length < MAX_LEADERBOARD_ENTRIES || 
-                         score > leaderboard[leaderboard.length - 1]?.score || 0;
-        
-        if (qualifies) {
-            showNameInputModal(score);
-        }
-    } catch (error) {
-        console.log('Checking qualification...', error);
-        // If no leaderboard exists yet, any score qualifies
-        showNameInputModal(score);
-    }
+    console.log('Checking if score qualifies:', score);
+    
+    // Always show the modal for any score
+    showNameInputModal(score);
 }
 
 // Show name input modal
 function showNameInputModal(score) {
+    console.log('Showing name input modal for score:', score);
+    
     const modal = document.getElementById('nameModal');
     const playerNameInput = document.getElementById('playerName');
     const submitBtn = document.getElementById('submitName');
     const skipBtn = document.getElementById('skipName');
+    
+    if (!modal) {
+        console.error('Modal element not found!');
+        return;
+    }
     
     modal.classList.remove('hidden');
     playerNameInput.value = '';
@@ -97,12 +89,20 @@ function showNameInputModal(score) {
     skipBtn.parentNode.replaceChild(newSkipBtn, skipBtn);
     
     // Add new event listeners
-    newSubmitBtn.addEventListener('click', () => submitScore(score));
-    newSkipBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    newSubmitBtn.addEventListener('click', () => {
+        console.log('Submit button clicked');
+        submitScore(score);
+    });
+    
+    newSkipBtn.addEventListener('click', () => {
+        console.log('Skip button clicked');
+        modal.classList.add('hidden');
+    });
     
     // Submit on Enter key
     playerNameInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
+            console.log('Enter key pressed');
             submitScore(score);
         }
     });
@@ -110,20 +110,36 @@ function showNameInputModal(score) {
 
 // Submit score to global leaderboard
 async function submitScore(score) {
+    console.log('Submitting score:', score);
+    
     const playerNameInput = document.getElementById('playerName');
     const modal = document.getElementById('nameModal');
     const name = playerNameInput.value.trim() || 'Anonymous';
     
+    console.log('Player name:', name);
+    
     try {
-        // Get current leaderboard
+        // Get current leaderboard with retry logic
         let leaderboard = [];
-        try {
-            const result = await window.storage.get(LEADERBOARD_KEY, true);
-            if (result && result.value) {
-                leaderboard = JSON.parse(result.value);
+        let retries = 3;
+        
+        while (retries > 0) {
+            try {
+                const result = await window.storage.get(LEADERBOARD_KEY, true);
+                if (result && result.value) {
+                    leaderboard = JSON.parse(result.value);
+                }
+                console.log('Current leaderboard loaded:', leaderboard);
+                break;
+            } catch (error) {
+                retries--;
+                if (retries === 0) {
+                    console.log('Could not load existing leaderboard, starting fresh');
+                } else {
+                    console.log('Retry loading leaderboard...', error);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
             }
-        } catch (error) {
-            console.log('Creating new leaderboard...', error);
         }
         
         // Add new entry
@@ -133,6 +149,8 @@ async function submitScore(score) {
             timestamp: Date.now()
         };
         
+        console.log('Adding new entry:', newEntry);
+        
         leaderboard.push(newEntry);
         
         // Sort by score (highest first)
@@ -141,26 +159,64 @@ async function submitScore(score) {
         // Keep only top entries
         leaderboard = leaderboard.slice(0, MAX_LEADERBOARD_ENTRIES);
         
-        // Save to shared storage
-        await window.storage.set(LEADERBOARD_KEY, JSON.stringify(leaderboard), true);
+        console.log('Updated leaderboard:', leaderboard);
         
-        // Close modal and refresh display
+        // Save to shared storage with retry logic
+        let saved = false;
+        retries = 5;
+        
+        while (retries > 0 && !saved) {
+            try {
+                const saveResult = await window.storage.set(LEADERBOARD_KEY, JSON.stringify(leaderboard), true);
+                console.log('Save result:', saveResult);
+                
+                if (saveResult) {
+                    saved = true;
+                    break;
+                }
+            } catch (error) {
+                retries--;
+                console.error(`Save attempt failed (${retries} retries left):`, error);
+                
+                if (retries > 0) {
+                    // Wait before retry
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+        
+        if (!saved) {
+            throw new Error('Could not save to leaderboard after multiple attempts');
+        }
+        
+        // Close modal
         modal.classList.add('hidden');
-        displayLeaderboard(leaderboard);
+        
+        // Reload leaderboard to show updated rankings
+        await loadLeaderboard();
         
         // Show success message
-        gameMessage.textContent = `🎉 ${name}, you're on the global leaderboard!`;
-        setTimeout(() => {
-            if (!running) gameMessage.textContent = 'Try again to beat your score!';
-        }, 3000);
+        const gameMessage = document.getElementById('gameMessage');
+        if (gameMessage) {
+            gameMessage.textContent = `🎉 ${name}, you're on the global leaderboard!`;
+            setTimeout(() => {
+                const runningCheck = typeof running !== 'undefined' ? running : false;
+                if (!runningCheck) gameMessage.textContent = 'Try again to beat your score!';
+            }, 3000);
+        }
+        
+        console.log('Score submitted successfully!');
         
     } catch (error) {
         console.error('Failed to save score:', error);
-        alert('Failed to save score to leaderboard. Please try again.');
+        alert('Failed to save score to leaderboard. The server might be busy. Please try again in a moment.');
+        
+        // Don't close the modal so user can retry
     }
 }
 
 // Initialize leaderboard on page load
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing leaderboard...');
     loadLeaderboard();
 });
