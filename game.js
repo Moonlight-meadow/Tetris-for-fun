@@ -3,9 +3,9 @@ const COLS = 10;
 const ROWS = 20;
 const BLOCK_SIZE = 30;
 const TARGET_SCORE = 5000;
-const LINES_PER_WAVE = 15;
-const INITIAL_DROP_INTERVAL = 1000;
-const SPEED_INCREASE_PER_WAVE = 50;
+const LINES_PER_WAVE = 10; // Wave up every 10 lines (was 15)
+const INITIAL_DROP_INTERVAL = 800; // Start faster: 800ms (was 1000ms)
+const SPEED_INCREASE_PER_WAVE = 75; // Bigger speed jumps: 75ms (was 50ms)
 const LOCK_DELAY = 2000; // 2 second lock delay
 
 // Tetromino Colors
