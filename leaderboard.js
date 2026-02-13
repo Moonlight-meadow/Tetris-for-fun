@@ -1,6 +1,6 @@
 // Global Leaderboard System using Persistent Storage
 const MAX_LEADERBOARD_ENTRIES = 10;
-const LEADERBOARD_KEY = 'tetris-leaderboard-v2';
+const LEADERBOARD_KEY = 'tetris-scores';
 
 // Load global leaderboard
 async function loadLeaderboard() {
@@ -14,8 +14,12 @@ async function loadLeaderboard() {
     try {
         leaderboardDiv.innerHTML = '<div class="leaderboard-item loading">Loading...</div>';
         
-        // Small delay to ensure storage is ready
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Check if storage API exists
+        if (!window.storage || !window.storage.get) {
+            console.error('Storage API not available');
+            displayLeaderboard([]);
+            return;
+        }
         
         const result = await window.storage.get(LEADERBOARD_KEY, true);
         
@@ -23,14 +27,15 @@ async function loadLeaderboard() {
         if (result && result.value) {
             try {
                 leaderboard = JSON.parse(result.value);
+                console.log('✓ Loaded', leaderboard.length, 'scores');
             } catch (e) {
-                console.error('Failed to parse leaderboard data:', e);
+                console.error('Parse error:', e);
             }
         }
         
         displayLeaderboard(leaderboard);
     } catch (error) {
-        console.log('No leaderboard yet, showing empty state');
+        console.log('No existing leaderboard:', error.message);
         displayLeaderboard([]);
     }
 }
@@ -65,10 +70,15 @@ function displayLeaderboard(leaderboard) {
 
 // Check if score qualifies
 async function checkLeaderboardQualification(score) {
-    console.log('=== LEADERBOARD CHECK ===');
-    console.log('Score:', score);
+    console.log('=== CHECKING SCORE:', score, '===');
     
-    // Always show modal for any score
+    // Check if storage is available
+    if (!window.storage || !window.storage.set) {
+        console.error('Storage API not available - leaderboard disabled');
+        alert('Leaderboard is currently unavailable. Your score: ' + score);
+        return;
+    }
+    
     showNameInputModal(score);
 }
 
@@ -118,109 +128,67 @@ function showNameInputModal(score) {
     playerNameInput.addEventListener('keypress', enterHandler);
 }
 
-// Submit score
+// Submit score with fallback to individual score storage
 async function submitScore(score) {
-    console.log('=== SUBMITTING SCORE ===');
+    console.log('=== SUBMITTING SCORE:', score, '===');
     
     const playerNameInput = document.getElementById('playerName');
     const modal = document.getElementById('nameModal');
     const submitBtn = document.getElementById('submitName');
     
     const name = playerNameInput.value.trim() || 'Anonymous';
-    console.log('Name:', name);
     
-    // Disable submit button to prevent double-clicks
     submitBtn.disabled = true;
     submitBtn.textContent = 'SAVING...';
     
     try {
-        // Step 1: Load existing leaderboard
-        let leaderboard = [];
+        // Try Method 1: Single shared leaderboard (preferred)
+        console.log('Trying shared leaderboard method...');
+        const success = await saveToSharedLeaderboard(name, score);
         
-        try {
-            await new Promise(resolve => setTimeout(resolve, 200));
-            const result = await window.storage.get(LEADERBOARD_KEY, true);
+        if (success) {
+            modal.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'SUBMIT';
             
-            if (result && result.value) {
-                leaderboard = JSON.parse(result.value);
-                console.log('Loaded existing leaderboard:', leaderboard.length, 'entries');
-            } else {
-                console.log('No existing leaderboard found');
+            await loadLeaderboard();
+            
+            const gameMessage = document.getElementById('gameMessage');
+            if (gameMessage) {
+                gameMessage.textContent = `🎉 ${name}, you're on the leaderboard!`;
+                setTimeout(() => {
+                    if (typeof running !== 'undefined' && !running) {
+                        gameMessage.textContent = 'Try again to beat your score!';
+                    }
+                }, 3000);
             }
-        } catch (e) {
-            console.log('Starting fresh leaderboard');
+            return;
         }
         
-        // Step 2: Add new entry
-        const newEntry = {
-            name: name,
-            score: score,
-            timestamp: Date.now()
-        };
+        // If shared method fails, try Method 2: Individual score entries
+        console.log('Shared method failed, trying individual score method...');
+        const success2 = await saveIndividualScore(name, score);
         
-        leaderboard.push(newEntry);
-        console.log('Added new entry');
-        
-        // Step 3: Sort and trim
-        leaderboard.sort((a, b) => b.score - a.score);
-        leaderboard = leaderboard.slice(0, MAX_LEADERBOARD_ENTRIES);
-        console.log('Sorted leaderboard:', leaderboard.length, 'entries');
-        
-        // Step 4: Save with multiple attempts
-        let saveSuccess = false;
-        const maxAttempts = 3;
-        
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                console.log(`Save attempt ${attempt}/${maxAttempts}`);
-                
-                await new Promise(resolve => setTimeout(resolve, 300 * attempt));
-                
-                const saveResult = await window.storage.set(
-                    LEADERBOARD_KEY, 
-                    JSON.stringify(leaderboard), 
-                    true
-                );
-                
-                console.log('Save result:', saveResult);
-                
-                if (saveResult && saveResult.key) {
-                    saveSuccess = true;
-                    console.log('✓ Save successful!');
-                    break;
-                }
-            } catch (saveError) {
-                console.error(`Attempt ${attempt} failed:`, saveError);
-                
-                if (attempt === maxAttempts) {
-                    throw new Error('All save attempts failed');
-                }
+        if (success2) {
+            modal.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'SUBMIT';
+            
+            await loadLeaderboardFromIndividualScores();
+            
+            const gameMessage = document.getElementById('gameMessage');
+            if (gameMessage) {
+                gameMessage.textContent = `🎉 Score saved: ${score}`;
+                setTimeout(() => {
+                    if (typeof running !== 'undefined' && !running) {
+                        gameMessage.textContent = 'Try again to beat your score!';
+                    }
+                }, 3000);
             }
+            return;
         }
         
-        if (!saveSuccess) {
-            throw new Error('Could not save to leaderboard');
-        }
-        
-        // Success!
-        modal.classList.add('hidden');
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'SUBMIT';
-        
-        // Reload leaderboard
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await loadLeaderboard();
-        
-        // Show success message
-        const gameMessage = document.getElementById('gameMessage');
-        if (gameMessage) {
-            gameMessage.textContent = `🎉 ${name}, you're on the global leaderboard!`;
-            setTimeout(() => {
-                if (typeof running !== 'undefined' && !running) {
-                    gameMessage.textContent = 'Try again to beat your score!';
-                }
-            }, 3000);
-        }
+        throw new Error('All save methods failed');
         
     } catch (error) {
         console.error('=== SAVE FAILED ===');
@@ -229,7 +197,118 @@ async function submitScore(score) {
         submitBtn.disabled = false;
         submitBtn.textContent = 'SUBMIT';
         
-        alert('Could not save your score. This might be a temporary issue with the storage system. Your score: ' + score);
+        alert('Unable to save score. The storage system may be temporarily unavailable.\n\nYour score: ' + score + '\nPlayer: ' + name);
+    }
+}
+
+// Method 1: Save to single shared leaderboard
+async function saveToSharedLeaderboard(name, score) {
+    try {
+        // Load existing
+        let leaderboard = [];
+        
+        try {
+            const result = await window.storage.get(LEADERBOARD_KEY, true);
+            if (result && result.value) {
+                leaderboard = JSON.parse(result.value);
+            }
+        } catch (e) {
+            console.log('No existing leaderboard, starting fresh');
+        }
+        
+        // Add new entry
+        leaderboard.push({
+            name: name,
+            score: score,
+            timestamp: Date.now()
+        });
+        
+        // Sort and trim
+        leaderboard.sort((a, b) => b.score - a.score);
+        leaderboard = leaderboard.slice(0, MAX_LEADERBOARD_ENTRIES);
+        
+        // Save
+        const data = JSON.stringify(leaderboard);
+        console.log('Saving data length:', data.length);
+        
+        const result = await window.storage.set(LEADERBOARD_KEY, data, true);
+        
+        if (result && result.key) {
+            console.log('✓ Saved successfully');
+            return true;
+        }
+        
+        return false;
+        
+    } catch (error) {
+        console.error('Shared save error:', error);
+        return false;
+    }
+}
+
+// Method 2: Save individual scores (fallback)
+async function saveIndividualScore(name, score) {
+    try {
+        const timestamp = Date.now();
+        const scoreKey = `score-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        const scoreData = JSON.stringify({
+            name: name,
+            score: score,
+            timestamp: timestamp
+        });
+        
+        const result = await window.storage.set(scoreKey, scoreData, true);
+        
+        if (result && result.key) {
+            console.log('✓ Individual score saved:', scoreKey);
+            return true;
+        }
+        
+        return false;
+        
+    } catch (error) {
+        console.error('Individual save error:', error);
+        return false;
+    }
+}
+
+// Load from individual scores (fallback)
+async function loadLeaderboardFromIndividualScores() {
+    try {
+        const result = await window.storage.list('score-', true);
+        
+        if (!result || !result.keys || result.keys.length === 0) {
+            console.log('No individual scores found');
+            displayLeaderboard([]);
+            return;
+        }
+        
+        console.log('Found', result.keys.length, 'individual scores');
+        
+        // Load all scores
+        const scores = [];
+        for (const key of result.keys) {
+            try {
+                const scoreResult = await window.storage.get(key, true);
+                if (scoreResult && scoreResult.value) {
+                    const scoreData = JSON.parse(scoreResult.value);
+                    scores.push(scoreData);
+                }
+            } catch (e) {
+                console.error('Failed to load score:', key);
+            }
+        }
+        
+        // Sort and display
+        scores.sort((a, b) => b.score - a.score);
+        const topScores = scores.slice(0, MAX_LEADERBOARD_ENTRIES);
+        
+        displayLeaderboard(topScores);
+        
+    } catch (error) {
+        console.error('Failed to load individual scores:', error);
+        displayLeaderboard([]);
     }
 }
 
