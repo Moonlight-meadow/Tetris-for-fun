@@ -72,10 +72,15 @@ function displayLeaderboard(leaderboard) {
 async function checkLeaderboardQualification(score) {
     console.log('=== CHECKING SCORE:', score, '===');
     
+    // Don't show modal for score of 0
+    if (!score || score === 0) {
+        console.log('Score is 0, skipping leaderboard');
+        return;
+    }
+    
     // Check if storage is available
     if (!window.storage || !window.storage.set) {
         console.error('Storage API not available - leaderboard disabled');
-        alert('Leaderboard is currently unavailable. Your score: ' + score);
         return;
     }
     
