@@ -90,7 +90,12 @@ let lockDelayTimer = 0;
 let isOnGround = false;
 let lockDelayActive = false;
 let moveCount = 0;
-const MAX_MOVES_BEFORE_LOCK = 15; // Reset lock after 15 moves to prevent infinite stalling
+const MAX_MOVES_BEFORE_LOCK = 15;
+
+// Combo system
+let comboCount = 0;
+let lastClearTime = 0;
+const COMBO_WINDOW = 3000; // 3 seconds to maintain combo // Reset lock after 15 moves to prevent infinite stalling
 
 // UI Elements
 const startBtn = document.getElementById('startBtn');
@@ -450,14 +455,54 @@ function checkMusicMilestones() {
 // Stop all music
 function stopAllMusic() {
     Object.values(sounds).forEach(sound => {
-        if (sound.tagName === 'AUDIO' && (sound.id.includes('Music') || sound.id.includes('milestone'))) {
+        if (sound.tagName === 'AUDIO') {
             sound.pause();
             sound.currentTime = 0;
         }
     });
 }
 
-// Clear completed lines
+// Create score particle effect
+function createScoreParticle(points) {
+    const particle = document.createElement('div');
+    particle.className = 'score-particle';
+    particle.textContent = `+${points}`;
+    
+    // Start from game canvas area
+    const canvas = document.getElementById('gameCanvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    const scoreElement = document.getElementById('score');
+    const scoreRect = scoreElement.getBoundingClientRect();
+    
+    // Position at center of canvas
+    particle.style.left = canvasRect.left + canvasRect.width / 2 + 'px';
+    particle.style.top = canvasRect.top + canvasRect.height / 2 + 'px';
+    
+    document.body.appendChild(particle);
+    
+    // Animate to score display
+    setTimeout(() => {
+        particle.style.left = scoreRect.left + scoreRect.width / 2 + 'px';
+        particle.style.top = scoreRect.top + scoreRect.height / 2 + 'px';
+        particle.style.opacity = '0';
+        particle.style.transform = 'scale(0.5)';
+    }, 50);
+    
+    // Flash the score display
+    setTimeout(() => {
+        scoreElement.classList.add('score-flash');
+        setTimeout(() => {
+            scoreElement.classList.remove('score-flash');
+        }, 300);
+    }, 600);
+    
+    // Remove particle
+    setTimeout(() => {
+        particle.remove();
+    }, 800);
+}
+
+// Clear completed lines with combo system
 function clearLines() {
     let cleared = 0;
     
@@ -472,10 +517,44 @@ function clearLines() {
     
     if (cleared > 0) {
         lines += cleared;
-        score += cleared * 10;
         
+        // Calculate score with combo system
+        let points = 0;
+        const currentTime = Date.now();
+        
+        // Check if this is part of a combo (within 3 seconds of last clear)
+        if (currentTime - lastClearTime < COMBO_WINDOW && comboCount > 0) {
+            comboCount++;
+        } else {
+            comboCount = 1;
+        }
+        lastClearTime = currentTime;
+        
+        // Base points
+        if (cleared === 1) {
+            points = 5;
+        } else if (cleared === 2) {
+            points = 15; // Bonus for double
+        } else if (cleared === 3) {
+            points = 30; // Big bonus for triple
+        } else if (cleared === 4) {
+            points = 50; // Massive bonus for Tetris!
+        }
+        
+        // Combo bonus (add 50 points per combo after first clear)
+        if (comboCount > 1) {
+            points += 50;
+        }
+        
+        score += points;
+        
+        // Show score particle
+        createScoreParticle(points);
+        
+        // Check music milestones
         checkMusicMilestones();
         
+        // Wave progression every 15 lines
         const newWave = Math.floor(lines / LINES_PER_WAVE) + 1;
         if (newWave > wave) {
             wave = newWave;
@@ -495,6 +574,11 @@ function clearLines() {
             hasReachedTarget = true;
             milestone5kPlayed = true;
             winGame();
+        }
+    } else {
+        // Reset combo if no lines cleared
+        if (Date.now() - lastClearTime > COMBO_WINDOW) {
+            comboCount = 0;
         }
     }
 }
@@ -669,6 +753,9 @@ function gameLoop(time = 0) {
 
 // Start game
 function startGame() {
+    // FIRST: Stop ALL audio completely
+    stopAllMusic();
+    
     board = createBoard();
     score = 0;
     lines = 0;
@@ -680,6 +767,8 @@ function startGame() {
     milestone4kPlayed = false;
     milestone5kPlayed = false;
     resetLockDelay();
+    comboCount = 0;
+    lastClearTime = 0;
     
     currentPiece = createPiece();
     nextPiece = createPiece();
@@ -698,20 +787,14 @@ function startGame() {
     
     gameMessage.textContent = 'Good luck!';
     
-    sounds.menu.pause();
-    sounds.menu.currentTime = 0;
-    sounds.background.pause();
-    sounds.background.currentTime = 0;
-    sounds.milestone2k.pause();
-    sounds.milestone2k.currentTime = 0;
-    sounds.milestone1k.pause();
-    sounds.milestone1k.currentTime = 0;
-    sounds.win.pause();
-    sounds.win.currentTime = 0;
-    
-    sounds.background.volume = 0.3;
-    sounds.background.loop = true;
-    playSound(sounds.background);
+    // Small delay before starting music to ensure everything is stopped
+    setTimeout(() => {
+        if (soundSettings.music) {
+            sounds.background.volume = 0.3;
+            sounds.background.loop = true;
+            playSound(sounds.background);
+        }
+    }, 100);
     
     lastTime = performance.now();
     requestAnimationFrame(gameLoop);
