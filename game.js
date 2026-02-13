@@ -6,7 +6,8 @@ const TARGET_SCORE = 5000;
 const LINES_PER_WAVE = 10; // Wave up every 10 lines (was 15)
 const INITIAL_DROP_INTERVAL = 800; // Start faster: 800ms (was 1000ms)
 const SPEED_INCREASE_PER_WAVE = 75; // Bigger speed jumps: 75ms (was 50ms)
-const LOCK_DELAY = 2000; // 2 second lock delay
+const LOCK_DELAY = 500; // 0.5 second lock delay (realistic Tetris)
+const MAX_LOCK_RESETS = 15; // Allow 15 moves/rotations before forced lock
 
 // Tetromino Colors
 const COLORS = [
@@ -89,8 +90,7 @@ let moveTimers = {};
 let lockDelayTimer = 0;
 let isOnGround = false;
 let lockDelayActive = false;
-let moveCount = 0;
-const MAX_MOVES_BEFORE_LOCK = 15;
+let lockResetCount = 0; // Track how many times lock has been reset
 
 // Combo system
 let comboCount = 0;
@@ -142,7 +142,7 @@ function createPiece() {
 function resetLockDelay() {
     lockDelayTimer = 0;
     lockDelayActive = false;
-    moveCount = 0;
+    lockResetCount = 0;
 }
 
 // Check if piece is on ground
@@ -383,12 +383,10 @@ function rotate() {
         }
     }
     
-    // Reset lock delay on rotation if on ground
-    if (isPieceOnGround() && lockDelayActive) {
-        moveCount++;
-        if (moveCount < MAX_MOVES_BEFORE_LOCK) {
-            lockDelayTimer = 0;
-        }
+    // Reset lock delay on rotation if on ground (Tetris spin trick!)
+    if (isPieceOnGround() && lockDelayActive && lockResetCount < MAX_LOCK_RESETS) {
+        lockDelayTimer = 0;
+        lockResetCount++;
     }
     
     playSound(sounds.rotate);
@@ -551,8 +549,8 @@ function clearLines() {
         
         console.log('Lines cleared:', cleared, 'Points:', points, 'Combo:', comboCount);
         
-        // Show score particle
-        createScoreParticle(points);
+        // Show score particle (indicate if it's a combo)
+        createScoreParticle(points, comboCount > 1);
         
         // Show combo message
         if (comboCount > 1) {
@@ -647,11 +645,9 @@ function move(dir) {
         currentPiece.x -= dir;
     } else {
         // Reset lock delay on successful horizontal move if on ground
-        if (isPieceOnGround() && lockDelayActive) {
-            moveCount++;
-            if (moveCount < MAX_MOVES_BEFORE_LOCK) {
-                lockDelayTimer = 0;
-            }
+        if (isPieceOnGround() && lockDelayActive && lockResetCount < MAX_LOCK_RESETS) {
+            lockDelayTimer = 0;
+            lockResetCount++;
         }
     }
 }
@@ -664,10 +660,16 @@ function updateUI() {
 }
 
 // Create score particle effect
-function createScoreParticle(points) {
+function createScoreParticle(points, isCombo = false) {
     const particle = document.createElement('div');
     particle.className = 'score-particle';
-    particle.textContent = `+${points}`;
+    
+    if (isCombo) {
+        particle.textContent = `🔥 +${points} 🔥`;
+        particle.style.fontSize = '56px';
+    } else {
+        particle.textContent = `+${points}`;
+    }
     
     // Start from game canvas area
     const canvas = document.getElementById('gameCanvas');
@@ -681,7 +683,7 @@ function createScoreParticle(points) {
     
     document.body.appendChild(particle);
     
-    console.log('Particle created:', points);
+    console.log('Particle created:', points, isCombo ? '(COMBO!)' : '');
     
     // Animate to score display
     requestAnimationFrame(() => {
@@ -698,8 +700,8 @@ function createScoreParticle(points) {
         scoreElement.classList.add('score-flash');
         setTimeout(() => {
             scoreElement.classList.remove('score-flash');
-        }, 300);
-    }, 600);
+        }, 400);
+    }, 650);
     
     // Remove particle
     setTimeout(() => {
@@ -784,8 +786,8 @@ function gameLoop(time = 0) {
     if (lockDelayActive) {
         lockDelayTimer += deltaTime;
         
-        // Check if lock delay expired or max moves reached
-        if (lockDelayTimer >= LOCK_DELAY || moveCount >= MAX_MOVES_BEFORE_LOCK) {
+        // Check if lock delay expired or max resets reached
+        if (lockDelayTimer >= LOCK_DELAY || lockResetCount >= MAX_LOCK_RESETS) {
             merge();
             clearLines();
             spawnNewPiece();
