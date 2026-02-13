@@ -6,6 +6,7 @@ const TARGET_SCORE = 5000;
 const LINES_PER_WAVE = 15;
 const INITIAL_DROP_INTERVAL = 1000;
 const SPEED_INCREASE_PER_WAVE = 50;
+const LOCK_DELAY = 2000; // 2 second lock delay
 
 // Tetromino Colors
 const COLORS = [
@@ -73,10 +74,17 @@ let lastTime = 0;
 let dropCounter = 0;
 let hasReachedTarget = false;
 let keysPressed = {};
-let moveDelay = 150; // Initial delay before repeat starts (ms)
-let moveInterval = 50; // Interval between repeated moves (ms)
-let downInterval = 30; // Faster interval for down arrow (ms)
-let moveTimers = {}; // Track timers for each key
+let moveDelay = 150;
+let moveInterval = 50;
+let downInterval = 30;
+let moveTimers = {};
+
+// Lock delay state
+let lockDelayTimer = 0;
+let isOnGround = false;
+let lockDelayActive = false;
+let moveCount = 0;
+const MAX_MOVES_BEFORE_LOCK = 15; // Reset lock after 15 moves to prevent infinite stalling
 
 // UI Elements
 const startBtn = document.getElementById('startBtn');
@@ -97,7 +105,6 @@ function init() {
     drawBoard();
     loadLeaderboard();
     
-    // Start menu music
     sounds.menu.volume = 0.3;
     playSound(sounds.menu);
 }
@@ -119,12 +126,23 @@ function createPiece() {
     };
 }
 
+// Reset lock delay
+function resetLockDelay() {
+    lockDelayTimer = 0;
+    lockDelayActive = false;
+    moveCount = 0;
+}
+
+// Check if piece is on ground
+function isPieceOnGround() {
+    return collide(0, 1);
+}
+
 // Draw grid lines
 function drawGrid() {
-    ctx.strokeStyle = 'rgba(100, 150, 200, 0.25)'; // More visible grid
+    ctx.strokeStyle = 'rgba(100, 150, 200, 0.25)';
     ctx.lineWidth = 1;
     
-    // Draw vertical lines
     for (let x = 0; x <= COLS; x++) {
         ctx.beginPath();
         ctx.moveTo(x * BLOCK_SIZE, 0);
@@ -132,7 +150,6 @@ function drawGrid() {
         ctx.stroke();
     }
     
-    // Draw horizontal lines
     for (let y = 0; y <= ROWS; y++) {
         ctx.beginPath();
         ctx.moveTo(0, y * BLOCK_SIZE);
@@ -148,25 +165,19 @@ function drawBlock(context, x, y, color, blockSize = BLOCK_SIZE) {
     context.fillStyle = color;
     context.fillRect(x * blockSize, y * blockSize, blockSize, blockSize);
     
-    // Highlight
     context.fillStyle = 'rgba(255, 255, 255, 0.3)';
     context.fillRect(x * blockSize + 1, y * blockSize + 1, blockSize / 3, blockSize / 3);
     
-    // Border
     context.strokeStyle = 'rgba(0, 0, 0, 0.5)';
     context.lineWidth = 1;
     context.strokeRect(x * blockSize, y * blockSize, blockSize, blockSize);
 }
 
 function drawBoard() {
-    // Clear canvas with dark background
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // ALWAYS draw grid (visible from start)
     drawGrid();
     
-    // Draw placed blocks
     board.forEach((row, y) => {
         row.forEach((value, x) => {
             if (value) drawBlock(ctx, x, y, COLORS[value]);
@@ -185,7 +196,6 @@ function drawPiece() {
     });
 }
 
-// Get ghost piece Y position
 function getGhostY() {
     if (!currentPiece) return 0;
     
@@ -196,13 +206,10 @@ function getGhostY() {
     return ghostY;
 }
 
-// Draw highlight beams from current piece to ghost
 function drawHighlightBeams() {
     if (!currentPiece) return;
     
     const ghostY = getGhostY();
-    
-    // Only draw beams if there's a drop distance
     if (ghostY <= currentPiece.y) return;
     
     currentPiece.shape.forEach((row, y) => {
@@ -212,7 +219,6 @@ function drawHighlightBeams() {
                 const currentBlockY = currentPiece.y + y;
                 const ghostBlockY = ghostY + y;
                 
-                // Create vertical gradient beam - subtle but visible
                 const gradient = ctx.createLinearGradient(
                     blockX * BLOCK_SIZE + BLOCK_SIZE / 2,
                     currentBlockY * BLOCK_SIZE,
@@ -220,14 +226,12 @@ function drawHighlightBeams() {
                     ghostBlockY * BLOCK_SIZE
                 );
                 
-                // Extremely subtle gradient - barely perceptible
                 gradient.addColorStop(0, 'rgba(255, 255, 150, 0.02)');
                 gradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.01)');
                 gradient.addColorStop(1, 'rgba(255, 255, 150, 0.005)');
                 
                 ctx.fillStyle = gradient;
                 
-                // Draw beam from bottom of current piece to top of ghost
                 const beamHeight = (ghostBlockY - currentBlockY) * BLOCK_SIZE - BLOCK_SIZE;
                 if (beamHeight > 0) {
                     ctx.fillRect(
@@ -237,7 +241,6 @@ function drawHighlightBeams() {
                         beamHeight
                     );
                     
-                    // Nearly invisible edges
                     ctx.strokeStyle = 'rgba(255, 255, 200, 0.03)';
                     ctx.lineWidth = 1;
                     ctx.strokeRect(
@@ -263,18 +266,14 @@ function drawGhostPiece() {
                 const blockX = currentPiece.x + x;
                 const blockY = ghostY + y;
                 
-                // Draw subtle glow
                 ctx.shadowColor = 'rgba(255, 255, 150, 0.4)';
                 ctx.shadowBlur = 8;
                 
-                // Draw ghost block with subtle fill
                 ctx.fillStyle = 'rgba(255, 255, 150, 0.12)';
                 ctx.fillRect(blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
                 
-                // Reset shadow for border
                 ctx.shadowBlur = 0;
                 
-                // Draw visible border
                 ctx.strokeStyle = 'rgba(255, 255, 200, 0.5)';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(blockX * BLOCK_SIZE + 2, blockY * BLOCK_SIZE + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
@@ -372,6 +371,14 @@ function rotate() {
         }
     }
     
+    // Reset lock delay on rotation if on ground
+    if (isPieceOnGround() && lockDelayActive) {
+        moveCount++;
+        if (moveCount < MAX_MOVES_BEFORE_LOCK) {
+            lockDelayTimer = 0;
+        }
+    }
+    
     playSound(sounds.rotate);
 }
 
@@ -401,13 +408,13 @@ function holdCurrentPiece() {
     }
     
     canHold = false;
+    resetLockDelay();
     playSound(sounds.stored);
     drawHoldPiece();
 }
 
 // Music milestone management
 function checkMusicMilestones() {
-    // At 3000 points - play 2kremaining.mp3
     if (score >= 3000 && !milestone3kPlayed) {
         milestone3kPlayed = true;
         stopAllMusic();
@@ -420,7 +427,6 @@ function checkMusicMilestones() {
         }, 2000);
     }
     
-    // At 4000 points - play 1kremaining.mp3
     if (score >= 4000 && !milestone4kPlayed) {
         milestone4kPlayed = true;
         stopAllMusic();
@@ -461,10 +467,8 @@ function clearLines() {
         lines += cleared;
         score += cleared * 10;
         
-        // Check music milestones
         checkMusicMilestones();
         
-        // Wave progression every 15 lines
         const newWave = Math.floor(lines / LINES_PER_WAVE) + 1;
         if (newWave > wave) {
             wave = newWave;
@@ -488,23 +492,36 @@ function clearLines() {
     }
 }
 
+// Spawn new piece
+function spawnNewPiece() {
+    currentPiece = nextPiece;
+    nextPiece = createPiece();
+    canHold = true;
+    resetLockDelay();
+    
+    drawNextPiece();
+    
+    if (collide()) {
+        gameOver();
+    }
+}
+
 // Drop piece
 function drop() {
     currentPiece.y++;
     
     if (collide()) {
         currentPiece.y--;
-        merge();
-        clearLines();
         
-        currentPiece = nextPiece;
-        nextPiece = createPiece();
-        canHold = true;
-        
-        drawNextPiece();
-        
-        if (collide()) {
-            gameOver();
+        // Don't merge immediately - start lock delay
+        if (!lockDelayActive) {
+            lockDelayActive = true;
+            lockDelayTimer = 0;
+        }
+    } else {
+        // Piece moved down successfully, reset lock delay
+        if (lockDelayActive) {
+            resetLockDelay();
         }
     }
 }
@@ -515,18 +532,10 @@ function hardDrop() {
         currentPiece.y++;
     }
     
+    // Hard drop bypasses lock delay
     merge();
     clearLines();
-    
-    currentPiece = nextPiece;
-    nextPiece = createPiece();
-    canHold = true;
-    
-    drawNextPiece();
-    
-    if (collide()) {
-        gameOver();
-    }
+    spawnNewPiece();
 }
 
 // Move piece
@@ -534,6 +543,14 @@ function move(dir) {
     currentPiece.x += dir;
     if (collide()) {
         currentPiece.x -= dir;
+    } else {
+        // Reset lock delay on successful horizontal move if on ground
+        if (isPieceOnGround() && lockDelayActive) {
+            moveCount++;
+            if (moveCount < MAX_MOVES_BEFORE_LOCK) {
+                lockDelayTimer = 0;
+            }
+        }
     }
 }
 
@@ -558,13 +575,26 @@ function gameLoop(time = 0) {
     lastTime = time;
     dropCounter += deltaTime;
     
-    if (dropCounter > dropInterval) {
-        drop();
-        dropCounter = 0;
+    // Handle lock delay
+    if (lockDelayActive) {
+        lockDelayTimer += deltaTime;
+        
+        // Check if lock delay expired or max moves reached
+        if (lockDelayTimer >= LOCK_DELAY || moveCount >= MAX_MOVES_BEFORE_LOCK) {
+            merge();
+            clearLines();
+            spawnNewPiece();
+        }
+    } else {
+        // Normal drop
+        if (dropCounter > dropInterval) {
+            drop();
+            dropCounter = 0;
+        }
     }
     
     drawBoard();
-    drawHighlightBeams();  // Draw beams before ghost and current piece
+    drawHighlightBeams();
     drawGhostPiece();
     drawPiece();
     
@@ -583,6 +613,7 @@ function startGame() {
     milestone3kPlayed = false;
     milestone4kPlayed = false;
     milestone5kPlayed = false;
+    resetLockDelay();
     
     currentPiece = createPiece();
     nextPiece = createPiece();
@@ -601,7 +632,6 @@ function startGame() {
     
     gameMessage.textContent = 'Good luck!';
     
-    // Stop ALL music including menu music explicitly
     sounds.menu.pause();
     sounds.menu.currentTime = 0;
     sounds.background.pause();
@@ -613,7 +643,6 @@ function startGame() {
     sounds.win.pause();
     sounds.win.currentTime = 0;
     
-    // Start game music
     sounds.background.volume = 0.3;
     sounds.background.loop = true;
     playSound(sounds.background);
@@ -627,7 +656,6 @@ function gameOver() {
     running = false;
     stopAllMusic();
     
-    // If player reached 5000 points but then lost, play win music
     if (hasReachedTarget) {
         playSound(sounds.win);
     } else {
@@ -638,7 +666,6 @@ function gameOver() {
     gameOverOverlay.classList.remove('hidden');
     gameMessage.textContent = 'Game Over! Try again?';
     
-    // Check if score qualifies for leaderboard
     checkLeaderboardQualification(score);
 }
 
@@ -676,9 +703,9 @@ function continueGame() {
             finishBtn.disabled = false;
             
             running = true;
+            resetLockDelay();
             gameMessage.textContent = 'Keep going for a higher score!';
             
-            // Continue with win music
             sounds.win.currentTime = 0;
             playSound(sounds.win);
             
@@ -698,7 +725,7 @@ function finishGame() {
     checkLeaderboardQualification(score);
 }
 
-// Keyboard controls with smooth movement
+// Keyboard controls
 document.addEventListener('keydown', e => {
     if (!running) return;
     
@@ -706,16 +733,13 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
     }
     
-    // If key is already being pressed, ignore (prevents key repeat from OS)
     if (keysPressed[e.key]) return;
     
     keysPressed[e.key] = true;
     
-    // Handle immediate action
     switch(e.key) {
         case 'ArrowLeft':
             move(-1);
-            // Start smooth repeat after delay
             moveTimers[e.key] = setTimeout(() => {
                 moveTimers[e.key] = setInterval(() => {
                     if (running && keysPressed['ArrowLeft']) move(-1);
@@ -724,7 +748,6 @@ document.addEventListener('keydown', e => {
             break;
         case 'ArrowRight':
             move(1);
-            // Start smooth repeat after delay
             moveTimers[e.key] = setTimeout(() => {
                 moveTimers[e.key] = setInterval(() => {
                     if (running && keysPressed['ArrowRight']) move(1);
@@ -734,15 +757,14 @@ document.addEventListener('keydown', e => {
         case 'ArrowDown':
             drop();
             dropCounter = 0;
-            // Start fast repeat with minimal delay
             moveTimers[e.key] = setTimeout(() => {
                 moveTimers[e.key] = setInterval(() => {
                     if (running && keysPressed['ArrowDown']) {
                         drop();
                         dropCounter = 0;
                     }
-                }, downInterval); // Use faster interval for down
-            }, 50); // Shorter delay for down arrow
+                }, downInterval);
+            }, 50);
             break;
         case 'ArrowUp':
             rotate();
@@ -760,7 +782,6 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
     keysPressed[e.key] = false;
     
-    // Clear any timers for this key
     if (moveTimers[e.key]) {
         clearTimeout(moveTimers[e.key]);
         clearInterval(moveTimers[e.key]);
