@@ -652,6 +652,50 @@ function updateUI() {
     document.getElementById('wave').textContent = wave;
 }
 
+// Create score particle effect
+function createScoreParticle(points) {
+    const particle = document.createElement('div');
+    particle.className = 'score-particle';
+    particle.textContent = `+${points}`;
+    
+    // Start from game canvas area
+    const canvas = document.getElementById('gameCanvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    const scoreElement = document.getElementById('score');
+    const scoreRect = scoreElement.getBoundingClientRect();
+    
+    // Position at center of canvas
+    particle.style.left = (canvasRect.left + canvasRect.width / 2) + 'px';
+    particle.style.top = (canvasRect.top + canvasRect.height / 2) + 'px';
+    
+    document.body.appendChild(particle);
+    
+    console.log('Particle created:', points);
+    
+    // Animate to score display
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            particle.style.left = (scoreRect.left + scoreRect.width / 2) + 'px';
+            particle.style.top = (scoreRect.top + scoreRect.height / 2) + 'px';
+            particle.style.opacity = '0';
+            particle.style.transform = 'scale(0.5)';
+        }, 50);
+    });
+    
+    // Flash the score display
+    setTimeout(() => {
+        scoreElement.classList.add('score-flash');
+        setTimeout(() => {
+            scoreElement.classList.remove('score-flash');
+        }, 300);
+    }, 600);
+    
+    // Remove particle
+    setTimeout(() => {
+        particle.remove();
+    }, 800);
+}
+
 // Play sound
 function playSound(audio) {
     // Check if it's music or sound effect
