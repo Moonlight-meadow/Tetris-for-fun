@@ -5,8 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tetris - Hardcore Mode</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Sound Settings Panel */
+        .sound-settings {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(26, 26, 46, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 150px;
+        }
+        
+        .sound-settings h4 {
+            margin: 0 0 10px 0;
+            color: #FFD93D;
+            font-size: 14px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 8px;
+        }
+        
+        .sound-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .sound-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .sound-btn:active {
+            transform: translateY(0);
+        }
+    </style>
 </head>
 <body>
+    <!-- Sound Settings Panel -->
+    <div class="sound-settings">
+        <h4>⚙️ SOUND</h4>
+        <button class="sound-btn" id="musicToggle" onclick="toggleMusic()">🎵 Music: ON</button>
+        <button class="sound-btn" id="sfxToggle" onclick="toggleSFX()">🔊 SFX: ON</button>
+    </div>
+
     <div class="smoke-container">
         <div class="smoke smoke1"></div>
         <div class="smoke smoke2"></div>
