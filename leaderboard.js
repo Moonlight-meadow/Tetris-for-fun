@@ -4,7 +4,7 @@ const MAX_LEADERBOARD_ENTRIES = 10;
 // IMPORTANT: Change this to your deployed server URL
 // For local testing: 'http://localhost:3000'
 // For production: 'https://your-app-name.onrender.com' or your deployed URL
-const API_URL = 'https://tetris-for-fun.onrender.com/api';
+const API_URL = 'http://localhost:3000/api';
 
 let leaderboardData = [];
 
@@ -24,7 +24,9 @@ async function loadLeaderboard() {
         
         if (data.success) {
             leaderboardData = data.scores;
+            daysUntilReset = data.daysUntilReset || 7;
             console.log('✓ Loaded GLOBAL leaderboard:', leaderboardData.length, 'scores');
+            console.log(`📅 Resets in ${daysUntilReset} days`);
             displayLeaderboard(leaderboardData);
         } else {
             throw new Error('Failed to load leaderboard');
@@ -48,12 +50,19 @@ function displayLeaderboard(leaderboard) {
         leaderboardDiv.innerHTML = `
             <div class="leaderboard-item empty">
                 No scores yet. Be the first! 🌍
+                <div style="font-size: 11px; margin-top: 5px; opacity: 0.7;">
+                    Resets in ${daysUntilReset} day${daysUntilReset !== 1 ? 's' : ''}
+                </div>
             </div>
         `;
         return;
     }
     
-    leaderboardDiv.innerHTML = leaderboard.map((entry, index) => {
+    leaderboardDiv.innerHTML = `
+        <div style="font-size: 11px; margin-bottom: 8px; opacity: 0.7; text-align: center;">
+            🔄 Resets in ${daysUntilReset} day${daysUntilReset !== 1 ? 's' : ''}
+        </div>
+    ` + leaderboard.map((entry, index) => {
         const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
         const date = new Date(entry.timestamp).toLocaleDateString();
         
@@ -140,6 +149,7 @@ async function submitScore(score) {
         if (data.success) {
             console.log('✓ Score saved to GLOBAL leaderboard! Rank:', data.rank);
             leaderboardData = data.scores;
+            daysUntilReset = data.daysUntilReset || 7;
             
             modal.classList.add('hidden');
             displayLeaderboard(leaderboardData);
