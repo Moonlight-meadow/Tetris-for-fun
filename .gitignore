@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Leaderboard data
+leaderboard.json
+
+# Archives directory (old leaderboards)
+archives/
+
+# Environment variables
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
